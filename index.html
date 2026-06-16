@@ -38,6 +38,146 @@
       line-height: 1.5;
     }
 
+    /* ── Auth screen ── */
+    #authScreen {
+      display: none;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    #authScreen.visible { display: flex; }
+
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow-md);
+      padding: 40px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .auth-logo {
+      text-align: center;
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .auth-title {
+      text-align: center;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .auth-sub {
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+    }
+
+    .auth-tabs {
+      display: flex;
+      background: var(--surface2);
+      border-radius: 8px;
+      padding: 3px;
+      margin-bottom: 24px;
+      gap: 2px;
+    }
+
+    .auth-tab {
+      flex: 1;
+      padding: 7px;
+      border: none;
+      background: transparent;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .auth-tab.active { background: var(--primary); color: #fff; }
+
+    .auth-field {
+      margin-bottom: 14px;
+    }
+    .auth-field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .auth-field input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s;
+    }
+    .auth-field input:focus { border-color: var(--primary); }
+
+    .auth-btn {
+      width: 100%;
+      padding: 11px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: background .15s;
+    }
+    .auth-btn:hover { background: var(--primary-dark); }
+    .auth-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .auth-error {
+      display: none;
+      background: var(--danger-light);
+      border: 1px solid var(--danger);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--danger);
+      margin-top: 12px;
+    }
+    .auth-error.visible { display: block; }
+
+    /* ── App ── */
+    #appScreen { display: none; }
+    #appScreen.visible { display: block; }
+
+    /* ── Loading ── */
+    #loadingScreen {
+      display: flex;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      color: var(--text-muted);
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     /* ── Header ── */
     header {
       background: var(--surface);
@@ -62,7 +202,8 @@
       gap: 8px;
     }
 
-    .header-actions { display: flex; gap: 8px; }
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+    .user-email { font-size: 12px; color: var(--text-muted); }
 
     /* ── Buttons ── */
     .btn {
@@ -258,6 +399,8 @@
       border-radius: 6px;
       font-size: 13px;
       text-align: center;
+      background: var(--surface2);
+      color: var(--text);
       outline: none;
     }
     .qty-input:focus { border-color: var(--primary); }
@@ -307,7 +450,6 @@
       align-items: center;
     }
     .shopping-item:last-child { border-bottom: none; }
-    .shopping-item-info { }
     .shopping-item-name { font-weight: 500; }
     .shopping-item-detail { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
     .shopping-item-qty {
@@ -469,128 +611,168 @@
       th:nth-child(4), td:nth-child(4),
       th:nth-child(5), td:nth-child(5) { display: none; }
       .logo span { display: none; }
+      .user-email { display: none; }
     }
   </style>
 </head>
 <body>
 
-<!-- Header -->
-<header>
-  <div class="logo">
-    🏠 <span>Inventario del Hogar</span>
-  </div>
-  <div class="header-actions">
-    <button class="btn btn-primary" onclick="openModal()">
-      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      Nuevo ítem
-    </button>
-  </div>
-</header>
+<!-- Loading -->
+<div id="loadingScreen">
+  <div class="spinner"></div>
+  <span>Cargando…</span>
+</div>
 
-<!-- Main -->
-<main>
-  <!-- Stats -->
-  <div class="stats" id="statsRow"></div>
+<!-- Auth screen -->
+<div id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo">🏠</div>
+    <div class="auth-title">Inventario del Hogar</div>
+    <div class="auth-sub">Iniciá sesión para acceder a tu inventario</div>
 
-  <!-- Alert banner -->
-  <div class="alert-banner" id="alertBanner">
-    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-    <span id="alertText"></span>
-  </div>
-
-  <!-- Tabs -->
-  <div class="tabs" id="tabsRow"></div>
-
-  <!-- Panels per category -->
-  <div id="panelsContainer"></div>
-
-  <!-- Shopping panel -->
-  <div id="panel-compras" class="panel">
-    <p class="section-title">
-      🛒 Lista de Compras Sugerida
-      <small style="font-size:12px;color:var(--text-muted);font-weight:400;">Ítems bajo mínimo + proyección de consumo mensual</small>
-    </p>
-    <div class="shopping-list-wrap" id="shoppingListWrap"></div>
-
-    <div class="export-box" style="margin-top:20px;">
-      <p style="font-size:13px;font-weight:600;margin-bottom:10px;">📋 Exportar como texto</p>
-      <textarea id="exportText" readonly></textarea>
-      <button class="btn btn-ghost" onclick="copyExport()">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-        Copiar
-      </button>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Ingresar</button>
+      <button class="auth-tab" onclick="switchAuthTab('register')">Registrarse</button>
     </div>
-  </div>
-</main>
 
-<!-- Modal agregar/editar -->
-<div class="modal-overlay" id="modalOverlay">
-  <div class="modal">
-    <div class="modal-header">
-      <p class="modal-title" id="modalTitle">Nuevo ítem</p>
-      <button class="modal-close" onclick="closeModal()">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+    <div class="auth-field">
+      <label>Email</label>
+      <input type="email" id="authEmail" placeholder="tu@email.com" autocomplete="email" />
     </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="field">
-          <label>Nombre *</label>
-          <input type="text" id="f_nombre" placeholder="Ej: Detergente" />
-        </div>
-        <div class="form-row">
+    <div class="auth-field">
+      <label>Contraseña</label>
+      <input type="password" id="authPassword" placeholder="••••••••" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter') doAuth()" />
+    </div>
+
+    <button class="auth-btn" id="authBtn" onclick="doAuth()">Ingresar</button>
+
+    <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
+<!-- App screen -->
+<div id="appScreen">
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      🏠 <span>Inventario del Hogar</span>
+    </div>
+    <div class="header-actions">
+      <span class="user-email" id="userEmail"></span>
+      <button class="btn btn-primary" onclick="openModal()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nuevo ítem
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Salir</button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main>
+    <!-- Stats -->
+    <div class="stats" id="statsRow"></div>
+
+    <!-- Alert banner -->
+    <div class="alert-banner" id="alertBanner">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span id="alertText"></span>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs" id="tabsRow"></div>
+
+    <!-- Panels per category -->
+    <div id="panelsContainer"></div>
+
+    <!-- Shopping panel -->
+    <div id="panel-compras" class="panel">
+      <p class="section-title">
+        🛒 Lista de Compras Sugerida
+        <small style="font-size:12px;color:var(--text-muted);font-weight:400;">Ítems bajo mínimo + proyección de consumo mensual</small>
+      </p>
+      <div class="shopping-list-wrap" id="shoppingListWrap"></div>
+
+      <div class="export-box" style="margin-top:20px;">
+        <p style="font-size:13px;font-weight:600;margin-bottom:10px;">📋 Exportar como texto</p>
+        <textarea id="exportText" readonly></textarea>
+        <button class="btn btn-ghost" onclick="copyExport()">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copiar
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal agregar/editar -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <p class="modal-title" id="modalTitle">Nuevo ítem</p>
+        <button class="modal-close" onclick="closeModal()">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
           <div class="field">
-            <label>Categoría *</label>
-            <select id="f_categoria" onchange="updateSubcats()">
-              <option value="">Seleccionar…</option>
-              <option>Artículos de Limpieza</option>
-              <option>Comida</option>
-              <option>Bebidas</option>
-              <option>Herramientas</option>
-            </select>
+            <label>Nombre *</label>
+            <input type="text" id="f_nombre" placeholder="Ej: Detergente" />
           </div>
-          <div class="field" id="subcatField">
-            <label>Subcategoría</label>
-            <select id="f_subcategoria">
-              <option value="">—</option>
-            </select>
+          <div class="form-row">
+            <div class="field">
+              <label>Categoría *</label>
+              <select id="f_categoria" onchange="updateSubcats()">
+                <option value="">Seleccionar…</option>
+                <option>Artículos de Limpieza</option>
+                <option>Comida</option>
+                <option>Bebidas</option>
+                <option>Herramientas</option>
+              </select>
+            </div>
+            <div class="field" id="subcatField">
+              <label>Subcategoría</label>
+              <select id="f_subcategoria">
+                <option value="">—</option>
+              </select>
+            </div>
           </div>
-        </div>
-        <div class="form-row">
-          <div class="field">
-            <label>Cantidad actual *</label>
-            <input type="number" id="f_cantidad" min="0" step="0.1" placeholder="0" />
+          <div class="form-row">
+            <div class="field">
+              <label>Cantidad actual *</label>
+              <input type="number" id="f_cantidad" min="0" step="0.1" placeholder="0" />
+            </div>
+            <div class="field">
+              <label>Unidad *</label>
+              <select id="f_unidad">
+                <option>unidades</option>
+                <option>kg</option>
+                <option>g</option>
+                <option>litros</option>
+                <option>ml</option>
+                <option>paquetes</option>
+                <option>cajas</option>
+                <option>bolsas</option>
+                <option>rollos</option>
+              </select>
+            </div>
           </div>
-          <div class="field">
-            <label>Unidad *</label>
-            <select id="f_unidad">
-              <option>unidades</option>
-              <option>kg</option>
-              <option>g</option>
-              <option>litros</option>
-              <option>ml</option>
-              <option>paquetes</option>
-              <option>cajas</option>
-              <option>bolsas</option>
-              <option>rollos</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="field">
-            <label>Cantidad mínima *</label>
-            <input type="number" id="f_minimo" min="0" step="0.1" placeholder="0" />
-          </div>
-          <div class="field">
-            <label>Consumo mensual</label>
-            <input type="number" id="f_consumo" min="0" step="0.1" placeholder="0" />
+          <div class="form-row">
+            <div class="field">
+              <label>Cantidad mínima *</label>
+              <input type="number" id="f_minimo" min="0" step="0.1" placeholder="0" />
+            </div>
+            <div class="field">
+              <label>Consumo mensual</label>
+              <input type="number" id="f_consumo" min="0" step="0.1" placeholder="0" />
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveItem()">Guardar</button>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" id="saveBtn" onclick="saveItem()">Guardar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -598,73 +780,156 @@
 <!-- Toast container -->
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
-  // ── Data ──────────────────────────────────────────────────────────────
+  // ── Supabase init ──────────────────────────────────────────────────────
+  const SUPABASE_URL = 'https://bbwhvmeshobgtnwszxyx.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_8Dnuz-2lMbd1IoXOUuq75w_CsdYFvFZ';
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  const STORAGE_KEY = 'inventario_hogar_v1';
-
+  // ── Constants ─────────────────────────────────────────────────────────
   const SUBCATS = {
     'Artículos de Limpieza': [],
     'Comida': ['Carne', 'Verduras', 'Otros'],
     'Bebidas': ['Vinos', 'Agua', 'Otros'],
     'Herramientas': ['Tornillos', 'Clavos', 'Tarugos', 'Otros'],
   };
-
   const CATEGORIES = Object.keys(SUBCATS);
 
   const DEFAULT_DATA = [
-    // Limpieza
-    { id: uid(), nombre: 'Detergente lavavajillas', categoria: 'Artículos de Limpieza', subcategoria: '', cantidad_actual: 1, cantidad_minima: 2, consumo_mensual: 2, unidad: 'litros' },
-    { id: uid(), nombre: 'Lavandina', categoria: 'Artículos de Limpieza', subcategoria: '', cantidad_actual: 1.5, cantidad_minima: 2, consumo_mensual: 3, unidad: 'litros' },
-    { id: uid(), nombre: 'Papel higiénico', categoria: 'Artículos de Limpieza', subcategoria: '', cantidad_actual: 8, cantidad_minima: 6, consumo_mensual: 12, unidad: 'rollos' },
-    { id: uid(), nombre: 'Jabón en polvo', categoria: 'Artículos de Limpieza', subcategoria: '', cantidad_actual: 0.5, cantidad_minima: 1, consumo_mensual: 1.5, unidad: 'kg' },
-    // Comida
-    { id: uid(), nombre: 'Pollo', categoria: 'Comida', subcategoria: 'Carne', cantidad_actual: 2, cantidad_minima: 1, consumo_mensual: 6, unidad: 'kg' },
-    { id: uid(), nombre: 'Carne picada', categoria: 'Comida', subcategoria: 'Carne', cantidad_actual: 0.5, cantidad_minima: 1, consumo_mensual: 3, unidad: 'kg' },
-    { id: uid(), nombre: 'Tomates', categoria: 'Comida', subcategoria: 'Verduras', cantidad_actual: 0.8, cantidad_minima: 1, consumo_mensual: 4, unidad: 'kg' },
-    { id: uid(), nombre: 'Papas', categoria: 'Comida', subcategoria: 'Verduras', cantidad_actual: 3, cantidad_minima: 2, consumo_mensual: 5, unidad: 'kg' },
-    { id: uid(), nombre: 'Arroz', categoria: 'Comida', subcategoria: 'Otros', cantidad_actual: 1, cantidad_minima: 2, consumo_mensual: 2, unidad: 'kg' },
-    { id: uid(), nombre: 'Fideos', categoria: 'Comida', subcategoria: 'Otros', cantidad_actual: 4, cantidad_minima: 3, consumo_mensual: 4, unidad: 'paquetes' },
-    // Bebidas
-    { id: uid(), nombre: 'Malbec Reserva', categoria: 'Bebidas', subcategoria: 'Vinos', cantidad_actual: 3, cantidad_minima: 2, consumo_mensual: 4, unidad: 'unidades' },
-    { id: uid(), nombre: 'Vino blanco', categoria: 'Bebidas', subcategoria: 'Vinos', cantidad_actual: 1, cantidad_minima: 2, consumo_mensual: 3, unidad: 'unidades' },
-    { id: uid(), nombre: 'Agua mineral', categoria: 'Bebidas', subcategoria: 'Agua', cantidad_actual: 6, cantidad_minima: 4, consumo_mensual: 12, unidad: 'litros' },
-    { id: uid(), nombre: 'Gaseosa', categoria: 'Bebidas', subcategoria: 'Otros', cantidad_actual: 2, cantidad_minima: 3, consumo_mensual: 6, unidad: 'litros' },
-    // Herramientas
-    { id: uid(), nombre: 'Tornillos 6x50', categoria: 'Herramientas', subcategoria: 'Tornillos', cantidad_actual: 15, cantidad_minima: 20, consumo_mensual: 5, unidad: 'unidades' },
-    { id: uid(), nombre: 'Clavos 2"', categoria: 'Herramientas', subcategoria: 'Clavos', cantidad_actual: 30, cantidad_minima: 20, consumo_mensual: 10, unidad: 'unidades' },
-    { id: uid(), nombre: 'Tarugos fischer 6', categoria: 'Herramientas', subcategoria: 'Tarugos', cantidad_actual: 8, cantidad_minima: 15, consumo_mensual: 5, unidad: 'unidades' },
-    { id: uid(), nombre: 'Cinta de aislar', categoria: 'Herramientas', subcategoria: 'Otros', cantidad_actual: 2, cantidad_minima: 1, consumo_mensual: 0.5, unidad: 'rollos' },
+    { nombre: 'Detergente lavavajillas', categoria: 'Artículos de Limpieza', subcategoria: '', cantidad_actual: 1, cantidad_minima: 2, consumo_mensual: 2, unidad: 'litros' },
+    { nombre: 'Lavandina', categoria: 'Artículos de Limpieza', subcategoria: '', cantidad_actual: 1.5, cantidad_minima: 2, consumo_mensual: 3, unidad: 'litros' },
+    { nombre: 'Papel higiénico', categoria: 'Artículos de Limpieza', subcategoria: '', cantidad_actual: 8, cantidad_minima: 6, consumo_mensual: 12, unidad: 'rollos' },
+    { nombre: 'Jabón en polvo', categoria: 'Artículos de Limpieza', subcategoria: '', cantidad_actual: 0.5, cantidad_minima: 1, consumo_mensual: 1.5, unidad: 'kg' },
+    { nombre: 'Pollo', categoria: 'Comida', subcategoria: 'Carne', cantidad_actual: 2, cantidad_minima: 1, consumo_mensual: 6, unidad: 'kg' },
+    { nombre: 'Carne picada', categoria: 'Comida', subcategoria: 'Carne', cantidad_actual: 0.5, cantidad_minima: 1, consumo_mensual: 3, unidad: 'kg' },
+    { nombre: 'Tomates', categoria: 'Comida', subcategoria: 'Verduras', cantidad_actual: 0.8, cantidad_minima: 1, consumo_mensual: 4, unidad: 'kg' },
+    { nombre: 'Papas', categoria: 'Comida', subcategoria: 'Verduras', cantidad_actual: 3, cantidad_minima: 2, consumo_mensual: 5, unidad: 'kg' },
+    { nombre: 'Arroz', categoria: 'Comida', subcategoria: 'Otros', cantidad_actual: 1, cantidad_minima: 2, consumo_mensual: 2, unidad: 'kg' },
+    { nombre: 'Fideos', categoria: 'Comida', subcategoria: 'Otros', cantidad_actual: 4, cantidad_minima: 3, consumo_mensual: 4, unidad: 'paquetes' },
+    { nombre: 'Malbec Reserva', categoria: 'Bebidas', subcategoria: 'Vinos', cantidad_actual: 3, cantidad_minima: 2, consumo_mensual: 4, unidad: 'unidades' },
+    { nombre: 'Vino blanco', categoria: 'Bebidas', subcategoria: 'Vinos', cantidad_actual: 1, cantidad_minima: 2, consumo_mensual: 3, unidad: 'unidades' },
+    { nombre: 'Agua mineral', categoria: 'Bebidas', subcategoria: 'Agua', cantidad_actual: 6, cantidad_minima: 4, consumo_mensual: 12, unidad: 'litros' },
+    { nombre: 'Gaseosa', categoria: 'Bebidas', subcategoria: 'Otros', cantidad_actual: 2, cantidad_minima: 3, consumo_mensual: 6, unidad: 'litros' },
+    { nombre: 'Tornillos 6x50', categoria: 'Herramientas', subcategoria: 'Tornillos', cantidad_actual: 15, cantidad_minima: 20, consumo_mensual: 5, unidad: 'unidades' },
+    { nombre: 'Clavos 2"', categoria: 'Herramientas', subcategoria: 'Clavos', cantidad_actual: 30, cantidad_minima: 20, consumo_mensual: 10, unidad: 'unidades' },
+    { nombre: 'Tarugos fischer 6', categoria: 'Herramientas', subcategoria: 'Tarugos', cantidad_actual: 8, cantidad_minima: 15, consumo_mensual: 5, unidad: 'unidades' },
+    { nombre: 'Cinta de aislar', categoria: 'Herramientas', subcategoria: 'Otros', cantidad_actual: 2, cantidad_minima: 1, consumo_mensual: 0.5, unidad: 'rollos' },
   ];
 
-  function uid() {
-    return Math.random().toString(36).slice(2) + Date.now().toString(36);
-  }
-
-  function loadData() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch(e) {}
-    return null;
-  }
-
-  function saveData() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
-  }
-
   // ── State ──────────────────────────────────────────────────────────────
-
   const state = {
-    items: loadData() || JSON.parse(JSON.stringify(DEFAULT_DATA)),
+    items: [],
     activeTab: CATEGORIES[0],
     editId: null,
-    searchTerms: {},  // per category
-    subfilters: {},   // per category
+    searchTerms: {},
+    subfilters: {},
+    user: null,
+    authMode: 'login',
   };
 
-  // ── Helpers ──────────────────────────────────────────────────────────
+  // ── Screens ──────────────────────────────────────────────────────────
+  function showScreen(name) {
+    document.getElementById('loadingScreen').style.display = name === 'loading' ? 'flex' : 'none';
+    document.getElementById('authScreen').classList.toggle('visible', name === 'auth');
+    document.getElementById('appScreen').classList.toggle('visible', name === 'app');
+  }
 
+  // ── Auth ──────────────────────────────────────────────────────────────
+  function switchAuthTab(mode) {
+    state.authMode = mode;
+    document.querySelectorAll('.auth-tab').forEach((b, i) => {
+      b.classList.toggle('active', (i === 0 && mode === 'login') || (i === 1 && mode === 'register'));
+    });
+    document.getElementById('authBtn').textContent = mode === 'login' ? 'Ingresar' : 'Registrarse';
+    document.getElementById('authError').classList.remove('visible');
+  }
+
+  async function doAuth() {
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const btn = document.getElementById('authBtn');
+    const errEl = document.getElementById('authError');
+
+    if (!email || !password) {
+      showAuthError('Completá email y contraseña');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Cargando…';
+    errEl.classList.remove('visible');
+
+    let result;
+    if (state.authMode === 'login') {
+      result = await sb.auth.signInWithPassword({ email, password });
+    } else {
+      result = await sb.auth.signUp({ email, password });
+    }
+
+    btn.disabled = false;
+    btn.textContent = state.authMode === 'login' ? 'Ingresar' : 'Registrarse';
+
+    if (result.error) {
+      showAuthError(translateAuthError(result.error.message));
+      return;
+    }
+
+    if (state.authMode === 'register' && result.data.user && !result.data.session) {
+      showAuthError('¡Registrado! Revisá tu email para confirmar la cuenta.');
+      return;
+    }
+  }
+
+  function showAuthError(msg) {
+    const el = document.getElementById('authError');
+    el.textContent = msg;
+    el.classList.add('visible');
+  }
+
+  function translateAuthError(msg) {
+    if (msg.includes('Invalid login')) return 'Email o contraseña incorrectos';
+    if (msg.includes('Email not confirmed')) return 'Confirmá tu email antes de ingresar';
+    if (msg.includes('User already registered')) return 'Este email ya está registrado';
+    if (msg.includes('Password should')) return 'La contraseña debe tener al menos 6 caracteres';
+    return msg;
+  }
+
+  async function doLogout() {
+    await sb.auth.signOut();
+    state.items = [];
+    state.user = null;
+    showScreen('auth');
+  }
+
+  // ── Data loading ──────────────────────────────────────────────────────
+  async function loadItems() {
+    const { data, error } = await sb
+      .from('items')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      toast('Error al cargar datos: ' + error.message, 'error');
+      return;
+    }
+
+    state.items = data || [];
+
+    // First login: seed with default data
+    if (state.items.length === 0) {
+      await seedDefaultData();
+    }
+  }
+
+  async function seedDefaultData() {
+    const userId = state.user.id;
+    const rows = DEFAULT_DATA.map(d => ({ ...d, user_id: userId }));
+    const { data, error } = await sb.from('items').insert(rows).select();
+    if (!error && data) state.items = data;
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────
   function stockStatus(item) {
     if (item.cantidad_actual <= 0) return 'critical';
     if (item.cantidad_actual < item.cantidad_minima * 0.5) return 'critical';
@@ -681,7 +946,6 @@
   }
 
   // ── Rendering ────────────────────────────────────────────────────────
-
   function render() {
     renderStats();
     renderAlert();
@@ -825,7 +1089,7 @@
           <div class="empty-state">
             <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
             <p>Sin ítems${search || subfilter ? ' para este filtro' : ' en esta categoría'}</p>
-            <small>Usá el botón <strong>Nuevo ítem</strong> para agregar</small>
+            <small>Usá el botón <strong>Agregar</strong> para incorporar ítems</small>
           </div>
         </td></tr>` : '';
 
@@ -882,7 +1146,7 @@
     sorted.forEach(item => {
       const needed = Math.max(0, item.cantidad_minima - item.cantidad_actual);
       const monthly = item.consumo_mensual || 0;
-      const suggested = Math.ceil(Math.max(needed, monthly) * 1.1); // 10% extra
+      const suggested = Math.ceil(Math.max(needed, monthly) * 1.1);
 
       const sub = item.subcategoria ? ` · ${item.subcategoria}` : '';
       const status = stockStatus(item);
@@ -917,7 +1181,6 @@
   }
 
   // ── Actions ───────────────────────────────────────────────────────────
-
   function setTab(cat) {
     state.activeTab = cat;
     render();
@@ -933,24 +1196,27 @@
     renderPanels();
   }
 
-  function updateQty(id, val) {
+  async function updateQty(id, val) {
+    const qty = parseFloat(val) || 0;
+    const { error } = await sb.from('items').update({ cantidad_actual: qty }).eq('id', id);
+    if (error) { toast('Error al actualizar', 'error'); return; }
+
     const item = state.items.find(i => i.id === id);
-    if (!item) return;
-    item.cantidad_actual = parseFloat(val) || 0;
-    saveData();
+    if (item) item.cantidad_actual = qty;
+
     renderStats();
     renderAlert();
     renderTabs();
     renderShoppingList();
-    // re-render row highlight without full panel rebuild
-    // (we do a lightweight re-render of just stats/tabs/shopping; table rows update via input value)
     renderPanels();
   }
 
-  function deleteItem(id) {
+  async function deleteItem(id) {
     if (!confirm('¿Eliminar este ítem del inventario?')) return;
+    const { error } = await sb.from('items').delete().eq('id', id);
+    if (error) { toast('Error al eliminar', 'error'); return; }
+
     state.items = state.items.filter(i => i.id !== id);
-    saveData();
     render();
     toast('Ítem eliminado', 'default');
   }
@@ -963,7 +1229,6 @@
   }
 
   // ── Modal ─────────────────────────────────────────────────────────────
-
   function openModal(id = null, prefillCat = null) {
     state.editId = id || null;
     const modal = document.getElementById('modalOverlay');
@@ -1009,7 +1274,7 @@
       subs.map(s => `<option>${s}</option>`).join('');
   }
 
-  function saveItem() {
+  async function saveItem() {
     const nombre = document.getElementById('f_nombre').value.trim();
     const categoria = document.getElementById('f_categoria').value;
     const subcategoria = document.getElementById('f_subcategoria').value;
@@ -1023,25 +1288,44 @@
       return;
     }
 
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+    btn.textContent = 'Guardando…';
+
     if (state.editId) {
-      const item = state.items.find(i => i.id === state.editId);
-      if (item) {
-        Object.assign(item, { nombre, categoria, subcategoria, cantidad_actual, unidad, cantidad_minima, consumo_mensual });
+      const { data, error } = await sb.from('items')
+        .update({ nombre, categoria, subcategoria, cantidad_actual, unidad, cantidad_minima, consumo_mensual })
+        .eq('id', state.editId)
+        .select()
+        .single();
+
+      if (error) { toast('Error al actualizar', 'error'); }
+      else {
+        const idx = state.items.findIndex(i => i.id === state.editId);
+        if (idx >= 0) state.items[idx] = data;
         toast('Ítem actualizado ✓', 'success');
       }
     } else {
-      state.items.push({ id: uid(), nombre, categoria, subcategoria, cantidad_actual, unidad, cantidad_minima, consumo_mensual });
-      state.activeTab = categoria;
-      toast('Ítem agregado ✓', 'success');
+      const { data, error } = await sb.from('items')
+        .insert({ nombre, categoria, subcategoria, cantidad_actual, unidad, cantidad_minima, consumo_mensual, user_id: state.user.id })
+        .select()
+        .single();
+
+      if (error) { toast('Error al agregar', 'error'); }
+      else {
+        state.items.push(data);
+        state.activeTab = categoria;
+        toast('Ítem agregado ✓', 'success');
+      }
     }
 
-    saveData();
+    btn.disabled = false;
+    btn.textContent = 'Guardar';
     closeModal();
     render();
   }
 
   // ── Toast ─────────────────────────────────────────────────────────────
-
   function toast(msg, type = 'default') {
     const c = document.getElementById('toastContainer');
     const el = document.createElement('div');
@@ -1052,17 +1336,15 @@
   }
 
   // ── Utils ─────────────────────────────────────────────────────────────
-
   function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
   function escAttr(s) { return escHtml(s); }
 
   // ── Keyboard ──────────────────────────────────────────────────────────
-
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeModal();
-    if ((e.key === 'Enter') && document.getElementById('modalOverlay').classList.contains('open')) {
+    if (e.key === 'Enter' && document.getElementById('modalOverlay').classList.contains('open')) {
       if (e.target.tagName !== 'BUTTON') saveItem();
     }
   });
@@ -1072,8 +1354,20 @@
   });
 
   // ── Init ──────────────────────────────────────────────────────────────
+  showScreen('loading');
 
-  render();
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (session?.user) {
+      state.user = session.user;
+      document.getElementById('userEmail').textContent = session.user.email;
+      showScreen('loading');
+      await loadItems();
+      showScreen('app');
+      render();
+    } else {
+      showScreen('auth');
+    }
+  });
 </script>
 </body>
 </html>
