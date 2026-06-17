@@ -603,15 +603,54 @@
     .alert-banner.visible { display: flex; }
     .alert-banner strong { font-weight: 600; }
 
+    /* ── Mobile cards ── */
+    .mobile-list { display: none; }
+
+    .mobile-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+    .mobile-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+    .mobile-card-name { font-weight: 600; font-size: 15px; flex: 1; }
+    .mobile-card-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .mobile-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    .mobile-card-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 13px;
+    }
+    .mobile-field label {
+      display: block;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin-bottom: 3px;
+    }
+    .mobile-qty-wrap { display: flex; align-items: center; gap: 6px; }
+
     /* ── Responsive ── */
     @media (max-width: 600px) {
       header { padding: 0 14px; }
       main { padding: 16px 10px; }
       .form-row { grid-template-columns: 1fr; }
-      th:nth-child(4), td:nth-child(4),
-      th:nth-child(5), td:nth-child(5) { display: none; }
       .logo span { display: none; }
       .user-email { display: none; }
+      .table-wrap { display: none; }
+      .mobile-list { display: block; }
+      .stats { grid-template-columns: 1fr 1fr; }
+      .btn-primary span { display: none; }
     }
   </style>
 </head>
@@ -1093,6 +1132,46 @@
           </div>
         </td></tr>` : '';
 
+    // Mobile cards
+    const mobileCards = items.length === 0
+      ? `<div class="empty-state">
+          <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <p>Sin ítems${search || subfilter ? ' para este filtro' : ' en esta categoría'}</p>
+        </div>`
+      : items.map(item => {
+          const st = stockStatus(item);
+          const pillClass = st === 'critical' ? 'qty-critical' : st === 'low' ? 'qty-low' : 'qty-ok';
+          const borderColor = st === 'critical' ? 'var(--danger)' : st === 'low' ? 'var(--warning)' : 'var(--border)';
+          const sub = item.subcategoria ? `<div class="mobile-card-sub">${item.subcategoria}</div>` : '';
+          return `<div class="mobile-card" style="border-color:${borderColor}">
+            <div class="mobile-card-top">
+              <div>
+                <div class="mobile-card-name">${escHtml(item.nombre)}</div>
+                ${sub}
+              </div>
+              <div class="mobile-card-actions">
+                <button class="btn btn-ghost btn-sm btn-icon" onclick="openModal('${item.id}')">✏️</button>
+                <button class="btn btn-danger btn-sm btn-icon" onclick="deleteItem('${item.id}')">🗑</button>
+              </div>
+            </div>
+            <div class="mobile-card-body">
+              <div class="mobile-field">
+                <label>Cantidad actual</label>
+                <div class="mobile-qty-wrap">
+                  <input class="qty-input" type="number" min="0" step="0.1"
+                    value="${item.cantidad_actual}"
+                    onchange="updateQty('${item.id}', this.value)" />
+                  <span class="qty-pill ${pillClass}">${item.cantidad_actual} ${item.unidad}</span>
+                </div>
+              </div>
+              <div class="mobile-field">
+                <label>Mínimo</label>
+                <span>${item.cantidad_minima} ${item.unidad}</span>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+
     return `
       <div class="toolbar">
         <div class="search-wrap">
@@ -1104,7 +1183,7 @@
         ${subcatSelect}
         <button class="btn btn-primary btn-sm" onclick="openModal(null, '${cat}')">
           <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Agregar
+          <span>Agregar</span>
         </button>
       </div>
       <div class="table-wrap">
@@ -1123,6 +1202,7 @@
           </tbody>
         </table>
       </div>
+      <div class="mobile-list">${mobileCards}</div>
     `;
   }
 
