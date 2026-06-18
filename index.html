@@ -1437,26 +1437,57 @@
   });
 
   // ── Init ──────────────────────────────────────────────────────────────
-  // Limpiar localStorage viejo (versión pre-Supabase)
-  try {
-    ['inventario_hogar_v1', 'inventario_hogar_v2'].forEach(k => localStorage.removeItem(k));
-  } catch(e) {}
+  // Limpiar localStorage viejo
+  try { ['inventario_hogar_v1', 'inventario_hogar_v2'].forEach(k => localStorage.removeItem(k)); } catch(e) {}
 
   showScreen('loading');
 
-  // Timeout de seguridad: si Supabase no responde en 6s, mostrar login
-  const authTimeout = setTimeout(() => showScreen('auth'), 6000);
+  let appStarted = false;
 
-  sb.auth.onAuthStateChange(async (event, session) => {
-    clearTimeout(authTimeout);
-    if (session?.user) {
-      state.user = session.user;
-      document.getElementById('userEmail').textContent = session.user.email;
-      showScreen('loading');
+  async function startApp(user) {
+    if (appStarted) return;
+    appStarted = true;
+    state.user = user;
+    document.getElementById('userEmail').textContent = user.email;
+    showScreen('loading');
+    try {
       await loadItems();
-      showScreen('app');
-      render();
+    } catch(e) {
+      toast('Error al cargar datos. Recargá la página.', 'error');
+    }
+    showScreen('app');
+    render();
+  }
+
+  // Timeout duro: si en 8s no pasó nada, mostrar login
+  const hardTimeout = setTimeout(() => {
+    if (!appStarted) showScreen('auth');
+  }, 8000);
+
+  // Intento 1: getSession() explícito (más confiable en mobile)
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user) {
+      clearTimeout(hardTimeout);
+      await startApp(session.user);
     } else {
+      clearTimeout(hardTimeout);
+      showScreen('auth');
+    }
+  } catch(e) {
+    // Si getSession falla, dejar que onAuthStateChange o el timeout resuelvan
+  }
+
+  // Intento 2: listener para cambios de sesión (login, logout, token refresh)
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session?.user && !appStarted) {
+      clearTimeout(hardTimeout);
+      await startApp(session.user);
+    }
+    if (event === 'SIGNED_OUT') {
+      appStarted = false;
+      state.items = [];
+      state.user = null;
       showScreen('auth');
     }
   });
