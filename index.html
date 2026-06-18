@@ -1552,8 +1552,6 @@
   // Limpiar localStorage viejo
   try { ['inventario_hogar_v1', 'inventario_hogar_v2'].forEach(k => localStorage.removeItem(k)); } catch(e) {}
 
-  showScreen('loading');
-
   let appStarted = false;
 
   async function startApp(user) {
@@ -1571,38 +1569,44 @@
     render();
   }
 
-  // Timeout duro: si en 8s no pasó nada, mostrar login
-  const hardTimeout = setTimeout(() => {
-    if (!appStarted) showScreen('auth');
-  }, 8000);
+  // Envolver en IIFE async para poder usar await sin top-level await (que rompe en scripts normales)
+  (async () => {
+    showScreen('loading');
 
-  // Intento 1: getSession() explícito (más confiable en mobile)
-  try {
-    const { data: { session } } = await sb.auth.getSession();
-    if (session?.user) {
-      clearTimeout(hardTimeout);
-      await startApp(session.user);
-    } else {
+    // Timeout duro: si en 8s no pasó nada, mostrar login
+    const hardTimeout = setTimeout(() => {
+      if (!appStarted) showScreen('auth');
+    }, 8000);
+
+    // Listener para cambios de sesión (login, logout, token refresh)
+    sb.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user && !appStarted) {
+        clearTimeout(hardTimeout);
+        await startApp(session.user);
+      }
+      if (event === 'SIGNED_OUT') {
+        appStarted = false;
+        state.items = [];
+        state.user = null;
+        showScreen('auth');
+      }
+    });
+
+    // getSession() explícito — más confiable que esperar solo el listener
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session?.user) {
+        clearTimeout(hardTimeout);
+        await startApp(session.user);
+      } else {
+        clearTimeout(hardTimeout);
+        showScreen('auth');
+      }
+    } catch(e) {
       clearTimeout(hardTimeout);
       showScreen('auth');
     }
-  } catch(e) {
-    // Si getSession falla, dejar que onAuthStateChange o el timeout resuelvan
-  }
-
-  // Intento 2: listener para cambios de sesión (login, logout, token refresh)
-  sb.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session?.user && !appStarted) {
-      clearTimeout(hardTimeout);
-      await startApp(session.user);
-    }
-    if (event === 'SIGNED_OUT') {
-      appStarted = false;
-      state.items = [];
-      state.user = null;
-      showScreen('auth');
-    }
-  });
+  })();
 </script>
 </body>
 </html>
