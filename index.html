@@ -956,7 +956,22 @@
       return;
     }
 
-    state.items = data || [];
+    const allItems = data || [];
+
+    // Deduplicar en memoria: quedarse con el primero de cada nombre+categoria
+    const seen = new Set();
+    const dupeIds = [];
+    state.items = allItems.filter(item => {
+      const key = item.nombre.toLowerCase() + '|' + item.categoria;
+      if (seen.has(key)) { dupeIds.push(item.id); return false; }
+      seen.add(key);
+      return true;
+    });
+
+    // Eliminar duplicados de la DB en background
+    if (dupeIds.length > 0) {
+      sb.from('items').delete().in('id', dupeIds).then(() => {});
+    }
 
     // First login: seed with default data
     if (state.items.length === 0) {
@@ -1368,6 +1383,17 @@
 
     if (!nombre || !categoria || isNaN(cantidad_actual) || isNaN(cantidad_minima)) {
       toast('Completá los campos obligatorios (*)', 'error');
+      return;
+    }
+
+    // Verificar duplicado (mismo nombre + categoría, excluyendo el ítem que se edita)
+    const duplicate = state.items.find(i =>
+      i.nombre.toLowerCase() === nombre.toLowerCase() &&
+      i.categoria === categoria &&
+      i.id !== state.editId
+    );
+    if (duplicate) {
+      toast(`Ya existe "${nombre}" en ${categoria}`, 'error');
       return;
     }
 
