@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Inventario del Hogar</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1434,9 +1437,18 @@
   });
 
   // ── Init ──────────────────────────────────────────────────────────────
+  // Limpiar localStorage viejo (versión pre-Supabase)
+  try {
+    ['inventario_hogar_v1', 'inventario_hogar_v2'].forEach(k => localStorage.removeItem(k));
+  } catch(e) {}
+
   showScreen('loading');
 
+  // Timeout de seguridad: si Supabase no responde en 6s, mostrar login
+  const authTimeout = setTimeout(() => showScreen('auth'), 6000);
+
   sb.auth.onAuthStateChange(async (event, session) => {
+    clearTimeout(authTimeout);
     if (session?.user) {
       state.user = session.user;
       document.getElementById('userEmail').textContent = session.user.email;
