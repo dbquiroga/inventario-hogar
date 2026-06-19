@@ -916,7 +916,7 @@
   // ── State ──────────────────────────────────────────────────────────────
   const state = {
     items: [],
-    activeTab: getCategories()[0],
+    activeTab: 'compras',
     editId: null,
     searchTerms: {},
     subfilters: {},
@@ -1107,6 +1107,12 @@
     const container = document.getElementById('tabsRow');
     let html = '';
 
+    // Lista de compras va primero
+    html += `<button class="tab ${state.activeTab === 'compras' ? 'active' : ''}" onclick="setTab('compras')">
+      🛒 Lista de Compras
+      <span class="badge ${allBelow().length === 0 ? 'hidden' : ''}">${allBelow().length}</span>
+    </button>`;
+
     getCategories().forEach(cat => {
       const n = itemsBelow(cat).length;
       const active = state.activeTab === cat ? 'active' : '';
@@ -1114,11 +1120,6 @@
         ${cat} <span class="badge ${n === 0 ? 'hidden' : ''}">${n}</span>
       </button>`;
     });
-
-    html += `<button class="tab ${state.activeTab === 'compras' ? 'active' : ''}" onclick="setTab('compras')">
-      🛒 Lista de Compras
-      <span class="badge ${allBelow().length === 0 ? 'hidden' : ''}">${allBelow().length}</span>
-    </button>`;
 
     html += `<button class="tab" onclick="openCatModal()" title="Nueva categoría" style="color:var(--primary);font-size:18px;padding:6px 14px;">+</button>`;
 
