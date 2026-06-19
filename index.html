@@ -606,6 +606,60 @@
     .alert-banner.visible { display: flex; }
     .alert-banner strong { font-weight: 600; }
 
+    /* ── Bottom nav ── */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      z-index: 90;
+      box-shadow: 0 -2px 12px rgba(0,0,0,.3);
+    }
+
+    .bottom-nav-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 10px 0 12px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--text-muted);
+      position: relative;
+      transition: color .15s;
+    }
+
+    .bottom-nav-btn.active { color: var(--primary); }
+
+    .bnav-icon { font-size: 22px; line-height: 1; }
+    .bnav-label { font-size: 11px; font-weight: 500; }
+
+    .bnav-badge {
+      position: absolute;
+      top: 6px;
+      right: calc(50% - 18px);
+      background: var(--danger);
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 999px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .bnav-badge.visible { display: flex; }
+
+    /* Add padding-bottom to main so content isn't hidden under bottom nav */
+    main { padding-bottom: 80px; }
+
     /* ── Mobile cards ── */
     .mobile-list { display: none; }
 
@@ -702,7 +756,7 @@
     </div>
     <div class="header-actions">
       <span class="user-email" id="userEmail"></span>
-      <button class="btn btn-primary" onclick="openModal()">
+      <button class="btn btn-primary" id="btnNuevo" onclick="openModal()">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Nuevo ítem
       </button>
@@ -721,20 +775,21 @@
       <span id="alertText"></span>
     </div>
 
-    <!-- Tabs -->
-    <div class="tabs" id="tabsRow"></div>
+    <!-- Sección Inventario -->
+    <div id="secInventario">
+      <!-- Category tabs -->
+      <div class="tabs" id="tabsRow"></div>
+      <!-- Panels per category -->
+      <div id="panelsContainer"></div>
+    </div>
 
-    <!-- Panels per category -->
-    <div id="panelsContainer"></div>
-
-    <!-- Shopping panel -->
-    <div id="panel-compras" class="panel">
-      <p class="section-title">
+    <!-- Sección Compras -->
+    <div id="secCompras" style="display:none">
+      <p class="section-title" style="font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
         🛒 Lista de Compras Sugerida
-        <small style="font-size:12px;color:var(--text-muted);font-weight:400;">Ítems bajo mínimo + proyección de consumo mensual</small>
+        <small style="font-size:12px;color:var(--text-muted);font-weight:400;">Ítems bajo mínimo + proyección mensual</small>
       </p>
       <div class="shopping-list-wrap" id="shoppingListWrap"></div>
-
       <div class="export-box" style="margin-top:20px;">
         <p style="font-size:13px;font-weight:600;margin-bottom:10px;">📋 Exportar como texto</p>
         <textarea id="exportText" readonly></textarea>
@@ -745,6 +800,19 @@
       </div>
     </div>
   </main>
+
+  <!-- Bottom nav -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="bottom-nav-btn" id="btnNavCompras" onclick="setSection('compras')">
+      <span class="bnav-icon">🛒</span>
+      <span class="bnav-label">Compras</span>
+      <span class="bnav-badge" id="navBadge"></span>
+    </button>
+    <button class="bottom-nav-btn" id="btnNavInventario" onclick="setSection('inventario')">
+      <span class="bnav-icon">📦</span>
+      <span class="bnav-label">Inventario</span>
+    </button>
+  </nav>
 
   <!-- Modal agregar/editar -->
   <div class="modal-overlay" id="modalOverlay">
@@ -916,7 +984,8 @@
   // ── State ──────────────────────────────────────────────────────────────
   const state = {
     items: [],
-    activeTab: 'compras',
+    section: 'compras',       // 'compras' | 'inventario'
+    activeTab: getCategories()[0],
     editId: null,
     searchTerms: {},
     subfilters: {},
@@ -1060,6 +1129,7 @@
   function render() {
     renderStats();
     renderAlert();
+    renderSection();
     renderTabs();
     renderPanels();
     renderShoppingList();
@@ -1103,15 +1173,24 @@
     }
   }
 
+  function renderSection() {
+    const isCompras = state.section === 'compras';
+    document.getElementById('secInventario').style.display = isCompras ? 'none' : 'block';
+    document.getElementById('secCompras').style.display = isCompras ? 'block' : 'none';
+    document.getElementById('btnNuevo').style.display = isCompras ? 'none' : '';
+    document.getElementById('btnNavCompras').classList.toggle('active', isCompras);
+    document.getElementById('btnNavInventario').classList.toggle('active', !isCompras);
+
+    // Badge en el botón de compras
+    const n = allBelow().length;
+    const badge = document.getElementById('navBadge');
+    badge.textContent = n;
+    badge.classList.toggle('visible', n > 0);
+  }
+
   function renderTabs() {
     const container = document.getElementById('tabsRow');
     let html = '';
-
-    // Lista de compras va primero
-    html += `<button class="tab ${state.activeTab === 'compras' ? 'active' : ''}" onclick="setTab('compras')">
-      🛒 Lista de Compras
-      <span class="badge ${allBelow().length === 0 ? 'hidden' : ''}">${allBelow().length}</span>
-    </button>`;
 
     getCategories().forEach(cat => {
       const n = itemsBelow(cat).length;
@@ -1137,9 +1216,6 @@
       div.innerHTML = buildCategoryPanel(cat);
       container.appendChild(div);
     });
-
-    document.getElementById('panel-compras').className =
-      `panel ${state.activeTab === 'compras' ? 'active' : ''}`;
   }
 
   function buildCategoryPanel(cat) {
@@ -1336,9 +1412,15 @@
   }
 
   // ── Actions ───────────────────────────────────────────────────────────
+  function setSection(sec) {
+    state.section = sec;
+    render();
+  }
+
   function setTab(cat) {
     state.activeTab = cat;
-    render();
+    renderTabs();
+    renderPanels();
   }
 
   function setSearch(cat, val) {
