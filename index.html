@@ -43,13 +43,13 @@
 
     /* ── Auth screen ── */
     #authScreen {
-      display: none;
+      display: flex;
       min-height: 100vh;
       align-items: center;
       justify-content: center;
       padding: 24px;
     }
-    #authScreen.visible { display: flex; }
+    #authScreen.hidden { display: none; }
 
     .auth-card {
       background: var(--surface);
@@ -163,7 +163,7 @@
 
     /* ── Loading ── */
     #loadingScreen {
-      display: flex;
+      display: none;
       min-height: 100vh;
       align-items: center;
       justify-content: center;
@@ -846,12 +846,19 @@
 <!-- Toast container -->
 <div class="toast-container" id="toastContainer"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"
+  onerror="document.getElementById('loadingScreen').style.display='none'"></script>
 <script>
   // ── Supabase init ──────────────────────────────────────────────────────
   const SUPABASE_URL = 'https://bbwhvmeshobgtnwszxyx.supabase.co';
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJid2h2bWVzaG9iZ3Rud3N6eHl4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1Njc1MDIsImV4cCI6MjA5NzE0MzUwMn0.abEtHsfuuKawsEl4OMC98JZtdOIzYaCDFzNTktT6Kak';
-  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  let sb;
+  try {
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  } catch(e) {
+    // SDK no cargó — auth screen ya es visible por defecto, no hay nada más que hacer
+    console.error('Supabase SDK no disponible:', e);
+  }
 
   // ── Constants ─────────────────────────────────────────────────────────
   const DEFAULT_SUBCATS = {
@@ -920,7 +927,7 @@
   // ── Screens ──────────────────────────────────────────────────────────
   function showScreen(name) {
     document.getElementById('loadingScreen').style.display = name === 'loading' ? 'flex' : 'none';
-    document.getElementById('authScreen').classList.toggle('visible', name === 'auth');
+    document.getElementById('authScreen').classList.toggle('hidden', name !== 'auth');
     document.getElementById('appScreen').classList.toggle('visible', name === 'app');
   }
 
@@ -1570,6 +1577,8 @@
   }
 
   // Envolver en IIFE async para poder usar await sin top-level await (que rompe en scripts normales)
+  if (!sb) return; // SDK no cargó, auth screen ya visible por defecto
+
   (async () => {
     showScreen('loading');
 
