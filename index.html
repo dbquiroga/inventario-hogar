@@ -1660,9 +1660,8 @@
   }
 
   // Envolver en IIFE async para poder usar await sin top-level await (que rompe en scripts normales)
-  if (!sb) return; // SDK no cargó, auth screen ya visible por defecto
-
-  (async () => {
+  // Si el SDK no cargó, la pantalla de auth ya es visible por defecto — no hacer nada más
+  if (sb) (async () => {
     showScreen('loading');
 
     // Timeout duro: si en 8s no pasó nada, mostrar login
