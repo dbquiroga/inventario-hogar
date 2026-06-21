@@ -1664,10 +1664,10 @@
   if (sb) (async () => {
     showScreen('loading');
 
-    // Timeout duro: si en 8s no pasó nada, mostrar login
+    // Timeout duro: si en 3s no pasó nada, mostrar login
     const hardTimeout = setTimeout(() => {
       if (!appStarted) showScreen('auth');
-    }, 8000);
+    }, 3000);
 
     // Listener para cambios de sesión (login, logout, token refresh)
     sb.auth.onAuthStateChange(async (event, session) => {
