@@ -1412,13 +1412,41 @@
   function saveCart() {
     try { localStorage.setItem(CART_KEY, JSON.stringify([...state.cartChecked])); } catch (e) {}
   }
-  function toggleCart(id) {
+  async function toggleCart(id) {
     if (!state.cartChecked) state.cartChecked = loadCart();
-    if (state.cartChecked.has(id)) state.cartChecked.delete(id);
-    else state.cartChecked.add(id);
-    saveCart();
-    renderShoppingList();
-    renderSection();
+
+    // Si ya estaba marcado → desmarcá sin confirmación
+    if (state.cartChecked.has(id)) {
+      state.cartChecked.delete(id);
+      saveCart();
+      renderShoppingList();
+      renderSection();
+      return;
+    }
+
+    // Primera vez → pedir confirmación y actualizar stock
+    const item = state.items.find(i => i.id === id);
+    if (!item) return;
+
+    const needed = Math.max(0, item.cantidad_minima - item.cantidad_actual);
+    const monthly = item.consumo_mensual || 0;
+    const suggested = Math.ceil(Math.max(needed, monthly) * 1.1);
+    const newQty = item.cantidad_actual + suggested;
+
+    const ok = confirm(
+      `¿Marcar "${item.nombre}" como comprado?\n\n` +
+      `Stock actual: ${item.cantidad_actual} ${item.unidad}\n` +
+      `Se sumará: +${suggested} ${item.unidad}\n` +
+      `Nuevo stock: ${newQty} ${item.unidad}`
+    );
+    if (!ok) return;
+
+    const { error } = await sb.from('items').update({ cantidad_actual: newQty }).eq('id', id);
+    if (error) { toast('Error al actualizar el stock', 'error'); return; }
+
+    item.cantidad_actual = newQty;
+    render();
+    toast(`✓ ${item.nombre} — stock actualizado a ${newQty} ${item.unidad}`, 'success');
   }
 
   function renderShoppingList() {
