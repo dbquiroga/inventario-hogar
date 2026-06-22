@@ -1,32 +1,90 @@
 # Inventario del Hogar
 
-App web de inventario doméstico. Un solo archivo `index.html` — abrilo en cualquier browser, sin instalación.
+App web de inventario doméstico con autenticación y base de datos en la nube. Un solo archivo `index.html` — abrilo en cualquier browser o usalo desde [GitHub Pages](https://dbquiroga.github.io/inventario-hogar).
+
+## Stack
+
+- **Frontend:** HTML + CSS + JavaScript puro, sin frameworks ni bundlers
+- **Backend:** [Supabase](https://supabase.com) — autenticación por email y base de datos PostgreSQL
+- **Hosting:** GitHub Pages (deploy automático desde `main`)
+
+Los datos de inventario se guardan en Supabase y son accesibles desde cualquier dispositivo con la misma cuenta. Las categorías personalizadas se guardan en `localStorage` del browser.
 
 ## Cómo usar
 
-**Abrir:** doble clic en `index.html` (o arrastralo al browser).
+**Registrarse:** ingresá a la app, completá email y contraseña en la pestaña "Registrarse" y confirmá el email que llega a tu casilla.
 
-**Categorías:** usá las pestañas superiores para navegar entre Artículos de Limpieza, Comida, Bebidas y Herramientas. La pestaña de Lista de Compras agrupa todo lo que está bajo mínimo.
+**Login:** ingresá con tu email y contraseña. La sesión persiste entre visitas.
 
-**Agregar ítem:** botón **Nuevo ítem** (header) o **Agregar** dentro de cada categoría. Completá nombre, categoría, subcategoría, cantidad actual, unidad, mínimo y consumo mensual.
+**Categorías:** navegá entre las pestañas superiores (Artículos de Limpieza, Comida, Bebidas, Herramientas, Otras). Podés agregar categorías propias con el botón "+".
 
-**Actualizar cantidad:** editá directamente el campo numérico en la fila del ítem y presioná Enter o hacé clic afuera. Los colores se actualizan al instante.
+**Agregar ítem:** botón **Nuevo ítem** en el header o **Agregar** dentro de cada categoría. Completá nombre, categoría, subcategoría, cantidad actual, unidad, mínimo y consumo mensual.
 
-**Editar ítem:** ícono de lápiz en la fila.
+**Actualizar cantidad:** editá directamente el campo numérico en la fila y presioná Enter o hacé clic afuera. Los colores se actualizan al instante.
 
-**Eliminar ítem:** ícono de papelera en la fila.
+**Editar / Eliminar:** íconos de lápiz y papelera en cada fila (en mobile aparecen como botones en la tarjeta del ítem).
 
 **Alertas de stock:**
-- Fondo amarillo → cantidad por debajo del mínimo
-- Fondo rojo → sin stock o menos del 50% del mínimo
-- El número en rojo sobre cada pestaña indica cuántos ítems están bajos
+- Amarillo → cantidad por debajo del mínimo
+- Rojo → sin stock o menos del 50% del mínimo
+- El número rojo sobre cada pestaña indica cuántos ítems están bajos
 
-**Lista de compras:** pestaña 🛒. Muestra todos los ítems bajo mínimo con cantidad sugerida (máximo entre lo faltante y el consumo mensual, con 10% de buffer).
+**Lista de compras (🛒):** sección accesible desde el nav inferior. Muestra todos los ítems bajo mínimo con cantidad sugerida: `ceil(max(faltante, consumo_mensual) × 1.1)`.
 
-**Exportar:** en la lista de compras, copiá el texto generado con el botón **Copiar**.
+**Copiar lista:** en la sección Compras, el botón **Copiar** genera texto listo para pegar en WhatsApp o cualquier app.
 
-## Datos
+**Logout:** botón "Salir" en el header.
 
-Todo se guarda automáticamente en el `localStorage` del browser. Los datos persisten entre sesiones en el mismo browser/dispositivo. No se envía nada a ningún servidor.
+## Estructura de la base de datos (Supabase)
 
-Para resetear al inventario de ejemplo: abrí la consola del browser (F12) y ejecutá `localStorage.removeItem('inventario_hogar_v1')`, luego recargá la página.
+```sql
+create table items (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid references auth.users not null,
+  nombre      text not null,
+  categoria   text not null,
+  subcategoria text,
+  cantidad_actual numeric default 0,
+  cantidad_minima numeric default 0,
+  consumo_mensual numeric default 0,
+  unidad      text default 'unidades',
+  created_at  timestamptz default now()
+);
+
+-- Row Level Security: cada usuario solo ve sus propios ítems
+alter table items enable row level security;
+create policy "usuarios ven sus ítems" on items
+  for all using (auth.uid() = user_id);
+```
+
+## Desarrollo local
+
+Cloná el repo y abrí `index.html` directo en el browser — no hay build step ni servidor necesario.
+
+```bash
+git clone https://github.com/dbquiroga/inventario-hogar
+cd inventario-hogar
+open index.html   # macOS
+```
+
+Para conectar tu propia instancia de Supabase, reemplazá `SUPABASE_URL` y `SUPABASE_KEY` al inicio del bloque `<script>` en `index.html`.
+
+## Agentes de IA
+
+El proyecto incluye dos agentes de Claude para desarrollo y QA:
+
+### `senior-dev.md`
+Agente de desarrollo con protocolo pre-edición obligatorio: lee el contexto completo antes de tocar código, valida el entorno de ejecución (browser script vs módulo vs async), y verifica patrones existentes antes de introducir nuevos.
+
+Para instalarlo: `cp senior-dev.md ~/.claude/agents/`
+
+### `qa-tester.md`
+Agente de QA que usa Claude in Chrome para probar la app de punta a punta: login, carga de datos, creación/edición/eliminación de ítems, categorías custom, responsividad mobile, y errores de consola. Reporta bugs con severidad y pasos de reproducción.
+
+Para instalarlo: `cp qa-tester.md ~/.claude/agents/`
+
+Para invocar los agentes desde Claude Code o Cowork:
+```
+@senior-dev arreglá el bug en la función X
+@qa-tester corré el suite completo
+```
