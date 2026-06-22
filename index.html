@@ -466,6 +466,36 @@
     }
     .shopping-item-unit { font-size: 11px; color: var(--text-muted); }
 
+    /* ── Checklist de compras ── */
+    .sl-progress { margin-bottom: 14px; }
+    .sl-progress-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--text-muted); margin-bottom: 7px; }
+    .sl-progress-pct { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+    .sl-bar { height: 6px; border-radius: 999px; background: var(--surface2); overflow: hidden; }
+    .sl-bar-fill { height: 100%; border-radius: 999px; background: var(--primary); transition: width .25s; }
+
+    .sl-cat { display: flex; align-items: center; gap: 9px; padding: 10px 16px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+    .sl-cat-emoji { font-size: 14px; }
+    .sl-cat-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); }
+    .sl-cat-count { margin-left: auto; font-size: 11px; color: var(--text-light); }
+
+    .sl-row { display: flex; align-items: center; gap: 13px; width: 100%; text-align: left; padding: 12px 16px; background: transparent; border: none; border-bottom: 1px solid var(--border); cursor: pointer; font-family: inherit; color: var(--text); transition: opacity .15s; }
+    .sl-row:last-child { border-bottom: none; }
+    .sl-row.checked { opacity: .45; }
+    .sl-row.checked .sl-name { text-decoration: line-through; }
+    .sl-row.checked .sl-qty-num { color: var(--text-muted); }
+    .sl-check { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--border); background: transparent; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+    .sl-row.checked .sl-check { border: none; background: var(--primary); }
+    .sl-main { flex: 1; min-width: 0; }
+    .sl-name { display: block; font-size: 15px; font-weight: 500; color: var(--text); }
+    .sl-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+    .sl-meta-text { font-size: 12px; color: var(--text-muted); }
+    .sl-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 5px; }
+    .sl-tag-low { color: var(--warning); background: var(--warning-light); }
+    .sl-tag-critical { color: var(--danger); background: var(--danger-light); }
+    .sl-qty { flex: 0 0 auto; text-align: right; }
+    .sl-qty-num { display: block; font-size: 19px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; line-height: 1; }
+    .sl-qty-unit { font-size: 11px; color: var(--text-light); }
+
     .export-box {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -788,9 +818,10 @@
     <!-- Sección Compras -->
     <div id="secCompras" style="display:none">
       <p class="section-title" style="font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
-        🛒 Lista de Compras Sugerida
-        <small style="font-size:12px;color:var(--text-muted);font-weight:400;">Ítems bajo mínimo + proyección mensual</small>
+        🛒 Lista de compras
+        <small style="font-size:12px;color:var(--text-muted);font-weight:400;">Marcá lo que ya pusiste en el carrito</small>
       </p>
+      <div id="shoppingProgress" class="sl-progress"></div>
       <div class="shopping-list-wrap" id="shoppingListWrap"></div>
       <div class="export-box" style="margin-top:20px;">
         <p style="font-size:13px;font-weight:600;margin-bottom:10px;">📋 Exportar como texto</p>
@@ -1359,15 +1390,69 @@
     `;
   }
 
+  // ── Checklist de compras: emojis, persistencia y toggle ──
+  const CAT_EMOJI = {
+    'Artículos de Limpieza': '🧼',
+    'Comida': '🥩',
+    'Bebidas': '🍷',
+    'Herramientas': '🔧',
+    'Otras': '📦',
+  };
+  function catEmoji(c) { return CAT_EMOJI[c] || '📦'; }
+
+  const SL_ICON_CHECK = `<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--primary-ink)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.5 3.5L13 4"/></svg>`;
+  const SL_ICON_ALERT = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>`;
+  const SL_ICON_DOWN = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>`;
+
+  const CART_KEY = 'inventario_cart_checked';
+  function loadCart() {
+    try { return new Set(JSON.parse(localStorage.getItem(CART_KEY) || '[]')); }
+    catch (e) { return new Set(); }
+  }
+  function saveCart() {
+    try { localStorage.setItem(CART_KEY, JSON.stringify([...state.cartChecked])); } catch (e) {}
+  }
+  function toggleCart(id) {
+    if (!state.cartChecked) state.cartChecked = loadCart();
+    if (state.cartChecked.has(id)) state.cartChecked.delete(id);
+    else state.cartChecked.add(id);
+    saveCart();
+    renderShoppingList();
+    renderSection();
+  }
+
   function renderShoppingList() {
     const below = allBelow();
     const wrap = document.getElementById('shoppingListWrap');
     const exportArea = document.getElementById('exportText');
+    const prog = document.getElementById('shoppingProgress');
+
+    if (!state.cartChecked) state.cartChecked = loadCart();
 
     if (below.length === 0) {
       wrap.innerHTML = `<div class="shopping-empty">✅ Todo el inventario está en stock. ¡Nada que comprar!</div>`;
+      if (prog) prog.innerHTML = '';
       exportArea.value = '';
       return;
+    }
+
+    // Soltar marcados que ya no están bajo mínimo
+    const belowIds = new Set(below.map(i => i.id));
+    let changed = false;
+    state.cartChecked.forEach(id => { if (!belowIds.has(id)) { state.cartChecked.delete(id); changed = true; } });
+    if (changed) saveCart();
+
+    const total = below.length;
+    const done = below.filter(i => state.cartChecked.has(i.id)).length;
+    const pct = Math.round((done / total) * 100);
+
+    if (prog) {
+      prog.innerHTML = `
+        <div class="sl-progress-top">
+          <span>${total - done} pendiente${total - done === 1 ? '' : 's'} · ${done} en el carrito</span>
+          <span class="sl-progress-pct">${pct}%</span>
+        </div>
+        <div class="sl-bar"><div class="sl-bar-fill" style="width:${pct}%"></div></div>`;
     }
 
     let html = '';
@@ -1380,32 +1465,34 @@
       const needed = Math.max(0, item.cantidad_minima - item.cantidad_actual);
       const monthly = item.consumo_mensual || 0;
       const suggested = Math.ceil(Math.max(needed, monthly) * 1.1);
-
-      const sub = item.subcategoria ? ` · ${item.subcategoria}` : '';
       const status = stockStatus(item);
-      const badge = status === 'critical'
-        ? `<span style="color:var(--danger);font-weight:700;">⚠ Sin stock</span>`
-        : `<span style="color:var(--warning);font-weight:600;">↓ Bajo mínimo</span>`;
+      const on = state.cartChecked.has(item.id);
 
       if (item.categoria !== lastCat) {
         if (lastCat) exportLines.push('');
         exportLines.push(`── ${item.categoria.toUpperCase()} ──`);
         lastCat = item.categoria;
-        html += `<div style="padding:8px 16px;background:var(--surface2);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);border-bottom:1px solid var(--border);">${item.categoria}</div>`;
+        const catCount = below.filter(i => i.categoria === item.categoria).length;
+        html += `<div class="sl-cat"><span class="sl-cat-emoji">${catEmoji(item.categoria)}</span><span class="sl-cat-name">${escHtml(item.categoria)}</span><span class="sl-cat-count">${catCount}</span></div>`;
       }
 
       exportLines.push(`• ${item.nombre}${item.subcategoria ? ' (' + item.subcategoria + ')' : ''}: ${suggested} ${item.unidad}  (actual: ${item.cantidad_actual}, mín: ${item.cantidad_minima})`);
 
-      html += `<div class="shopping-item">
-        <div class="shopping-item-info">
-          <div class="shopping-item-name">${escHtml(item.nombre)}</div>
-          <div class="shopping-item-detail">${item.categoria}${sub} · Actual: ${item.cantidad_actual} ${item.unidad} · Mín: ${item.cantidad_minima} ${item.unidad} · ${badge}</div>
-        </div>
-        <div>
-          <div class="shopping-item-qty">${suggested}</div>
-          <div class="shopping-item-unit">${item.unidad}</div>
-        </div>
-      </div>`;
+      const tag = status === 'critical'
+        ? `<span class="sl-tag sl-tag-critical">${SL_ICON_ALERT} Sin stock</span>`
+        : `<span class="sl-tag sl-tag-low">${SL_ICON_DOWN} Bajo</span>`;
+
+      html += `<button type="button" class="sl-row${on ? ' checked' : ''}" onclick="toggleCart('${item.id}')">
+        <span class="sl-check">${on ? SL_ICON_CHECK : ''}</span>
+        <span class="sl-main">
+          <span class="sl-name">${escHtml(item.nombre)}</span>
+          <span class="sl-meta">${tag}<span class="sl-meta-text">tenés ${item.cantidad_actual} · mín ${item.cantidad_minima} ${item.unidad}</span></span>
+        </span>
+        <span class="sl-qty">
+          <span class="sl-qty-num">${suggested}</span>
+          <span class="sl-qty-unit">${item.unidad}</span>
+        </span>
+      </button>`;
     });
 
     exportLines.push('', `Generado: ${new Date().toLocaleString('es-AR')}`);
