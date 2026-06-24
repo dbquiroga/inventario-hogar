@@ -492,6 +492,29 @@
     .sl-confirm-btn:active { opacity: .75; }
     .sl-confirm-cancel { background: var(--surface); border: 1px solid var(--border) !important; color: var(--text-muted); }
     .sl-confirm-ok { background: var(--primary); color: #0C120E; }
+    .sl-confirm-price { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .sl-price-symbol { font-size: 14px; font-weight: 700; color: var(--text-muted); flex-shrink: 0; }
+    .sl-price-input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 15px; color: var(--text); font-family: inherit; outline: none; min-width: 0; }
+    .sl-price-input:focus { border-color: var(--primary); }
+    .sl-price-input::placeholder { color: var(--text-muted); }
+    /* Botón "Ver gastos" */
+    .sl-gastos-btn { display: flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; font-family: inherit; transition: border-color .15s, color .15s; }
+    .sl-gastos-btn:hover { border-color: var(--primary); color: var(--primary); }
+    /* Modal de gastos */
+    .gastos-month-nav { display: flex; align-items: center; justify-content: space-between; padding: 0 24px 16px; }
+    .gastos-month-nav button { background: none; border: 1px solid var(--border); border-radius: 7px; width: 32px; height: 32px; cursor: pointer; color: var(--text); display: flex; align-items: center; justify-content: center; }
+    .gastos-month-label { font-size: 14px; font-weight: 600; color: var(--text); }
+    .gastos-body { padding: 0 24px 20px; display: flex; flex-direction: column; gap: 14px; }
+    .gastos-empty { text-align: center; padding: 32px 0; font-size: 14px; color: var(--text-muted); }
+    .gastos-row { display: flex; flex-direction: column; gap: 5px; }
+    .gastos-row-top { display: flex; justify-content: space-between; align-items: baseline; }
+    .gastos-cat { font-size: 13px; font-weight: 600; color: var(--text); }
+    .gastos-amount { font-size: 13px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+    .gastos-bar-track { height: 8px; border-radius: 99px; background: var(--surface2); overflow: hidden; }
+    .gastos-bar-fill { height: 100%; border-radius: 99px; background: var(--primary); transition: width .4s; }
+    .gastos-total { border-top: 1px solid var(--border); margin: 0 24px; padding: 14px 0 0; display: flex; justify-content: space-between; font-size: 14px; }
+    .gastos-total-label { color: var(--text-muted); font-weight: 600; }
+    .gastos-total-val { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
     .sl-main { flex: 1; min-width: 0; }
     .sl-name { display: block; font-size: 15px; font-weight: 500; color: var(--text); }
     .sl-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
@@ -824,9 +847,13 @@
 
     <!-- Sección Compras -->
     <div id="secCompras" style="display:none">
-      <p class="section-title" style="font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+      <p class="section-title" style="font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         🛒 Lista de compras
-        <small style="font-size:12px;color:var(--text-muted);font-weight:400;">Marcá lo que ya pusiste en el carrito</small>
+        <small style="font-size:12px;color:var(--text-muted);font-weight:400;flex:1;">Marcá lo que ya pusiste en el carrito</small>
+        <button class="sl-gastos-btn" onclick="showGastos()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Ver gastos
+        </button>
       </p>
       <div id="shoppingProgress" class="sl-progress"></div>
       <div class="shopping-list-wrap" id="shoppingListWrap"></div>
@@ -948,6 +975,25 @@
       <button class="btn btn-ghost" onclick="closeCatModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveCategory()">Crear categoría</button>
     </div>
+  </div>
+</div>
+
+<!-- Modal de gastos por categoría -->
+<div class="modal-overlay" id="gastosModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <p class="modal-title">📊 Gastos por categoría</p>
+      <button class="modal-close" onclick="closeGastos()">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="gastos-month-nav">
+      <button onclick="gastosNavMonth(-1)"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <span class="gastos-month-label" id="gastosMonthLabel"></span>
+      <button onclick="gastosNavMonth(1)"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+    </div>
+    <div class="gastos-body" id="gastosBody"></div>
+    <div class="gastos-total" id="gastosTotal"></div>
   </div>
 </div>
 
@@ -1413,6 +1459,18 @@
   const SL_ICON_DOWN = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>`;
 
   const CART_KEY = 'inventario_cart_checked';
+  const HIST_KEY  = 'inventario_compras_hist';
+
+  function loadCompraHistory() {
+    try { return JSON.parse(localStorage.getItem(HIST_KEY) || '[]'); }
+    catch (e) { return []; }
+  }
+  function saveCompraHistory(entry) {
+    const hist = loadCompraHistory();
+    hist.push(entry);
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(hist)); } catch (e) {}
+  }
+
   function loadCart() {
     try { return new Set(JSON.parse(localStorage.getItem(CART_KEY) || '[]')); }
     catch (e) { return new Set(); }
@@ -1429,9 +1487,12 @@
     renderSection();
   }
 
-  // Segundo toque: confirma, actualiza stock en Supabase
+  // Segundo toque: confirma, actualiza stock en Supabase y guarda precio
   async function confirmCart(id) {
+    const priceInput = document.getElementById('sl-price-input');
+    const precio = priceInput ? parseFloat(priceInput.value) || null : null;
     state.cartPending = null;
+
     const item = state.items.find(i => i.id === id);
     if (!item) return;
 
@@ -1444,8 +1505,23 @@
     if (error) { toast('Error al actualizar el stock', 'error'); return; }
 
     item.cantidad_actual = newQty;
+
+    // Guardar en historial si se ingresó un precio
+    if (precio && precio > 0) {
+      saveCompraHistory({
+        itemId: item.id,
+        nombre: item.nombre,
+        categoria: item.categoria,
+        unidad: item.unidad,
+        cantidad: suggested,
+        precio,
+        fecha: new Date().toISOString(),
+      });
+    }
+
     render();
-    toast(`✓ ${item.nombre} — stock actualizado a ${newQty} ${item.unidad}`, 'success');
+    const msg = precio ? `✓ ${item.nombre} — $${precio.toLocaleString('es-AR')}` : `✓ ${item.nombre} — stock actualizado`;
+    toast(msg, 'success');
   }
 
   // Cancelar: cierra la barra sin hacer nada
@@ -1453,6 +1529,84 @@
     state.cartPending = null;
     renderShoppingList();
     renderSection();
+  }
+
+  // ── Gastos mensuales ──────────────────────────────────────────────────────
+  let gastosMonthOffset = 0; // 0 = mes actual, -1 = mes anterior, etc.
+
+  function showGastos() {
+    gastosMonthOffset = 0;
+    renderGastosModal();
+    document.getElementById('gastosModalOverlay').classList.add('active');
+  }
+
+  function closeGastos() {
+    document.getElementById('gastosModalOverlay').classList.remove('active');
+  }
+
+  function gastosNavMonth(delta) {
+    gastosMonthOffset += delta;
+    renderGastosModal();
+  }
+
+  function renderGastosModal() {
+    const now = new Date();
+    const targetYear = now.getFullYear();
+    const targetMonth = now.getMonth() + gastosMonthOffset; // can overflow, Date handles it
+    const ref = new Date(targetYear, targetMonth, 1);
+    const year = ref.getFullYear();
+    const month = ref.getMonth(); // 0-indexed
+
+    // Label
+    const label = ref.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    const labelEl = document.getElementById('gastosMonthLabel');
+    if (labelEl) labelEl.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+
+    // Filter history for this month
+    const hist = loadCompraHistory();
+    const monthEntries = hist.filter(e => {
+      const d = new Date(e.fecha);
+      return d.getFullYear() === year && d.getMonth() === month && e.precio;
+    });
+
+    const bodyEl = document.getElementById('gastosBody');
+    const totalEl = document.getElementById('gastosTotal');
+
+    if (monthEntries.length === 0) {
+      bodyEl.innerHTML = `<div class="gastos-empty">Sin gastos registrados este mes</div>`;
+      totalEl.innerHTML = '';
+      return;
+    }
+
+    // Group by category
+    const byCat = {};
+    monthEntries.forEach(e => {
+      const cat = e.categoria || 'Sin categoría';
+      byCat[cat] = (byCat[cat] || 0) + (e.precio || 0);
+    });
+
+    const total = Object.values(byCat).reduce((a, b) => a + b, 0);
+    const maxVal = Math.max(...Object.values(byCat));
+
+    const rows = Object.entries(byCat)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat, amount]) => {
+        const pct = maxVal > 0 ? (amount / maxVal) * 100 : 0;
+        return `<div class="gastos-row">
+          <div class="gastos-row-top">
+            <span class="gastos-cat">${escHtml(cat)}</span>
+            <span class="gastos-amount">$${amount.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+          </div>
+          <div class="gastos-bar-track">
+            <div class="gastos-bar-fill" style="width:${pct.toFixed(1)}%"></div>
+          </div>
+        </div>`;
+      }).join('');
+
+    bodyEl.innerHTML = rows;
+    totalEl.innerHTML = `
+      <span class="gastos-total-label">Total del mes</span>
+      <span class="gastos-total-val">$${total.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>`;
   }
 
   function renderShoppingList() {
@@ -1520,7 +1674,7 @@
 
       if (isPending) {
         // Barra de confirmación inline (opción A: dos toques)
-        html += `<div class="sl-row-confirm">
+        html += `<div class="sl-row-confirm" style="flex-wrap:wrap;">
           <span class="sl-confirm-label">¿Ya lo pusiste en el carrito?</span>
           <button type="button" class="sl-confirm-btn sl-confirm-cancel" onclick="cancelCart()" aria-label="Cancelar">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
@@ -1528,6 +1682,10 @@
           <button type="button" class="sl-confirm-btn sl-confirm-ok" onclick="confirmCart('${item.id}')" aria-label="Confirmar">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.5 3.5L13 4"/></svg>
           </button>
+          <div class="sl-confirm-price">
+            <span class="sl-price-symbol">$</span>
+            <input type="number" id="sl-price-input" class="sl-price-input" placeholder="Precio (opcional)" min="0" step="0.01" inputmode="decimal">
+          </div>
         </div>`;
       } else {
         html += `<button type="button" class="sl-row${on ? ' checked' : ''}" onclick="toggleCart('${item.id}')">
