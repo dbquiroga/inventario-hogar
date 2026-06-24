@@ -485,6 +485,13 @@
     .sl-row.checked .sl-qty-num { color: var(--text-muted); }
     .sl-check { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--border); background: transparent; display: flex; align-items: center; justify-content: center; transition: all .15s; }
     .sl-row.checked .sl-check { border: none; background: var(--primary); }
+    /* Barra de confirmación inline (opción A) */
+    .sl-row-confirm { display: flex; align-items: center; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+    .sl-confirm-label { flex: 1; font-size: 14px; font-weight: 600; color: var(--text); }
+    .sl-confirm-btn { width: 40px; height: 40px; border-radius: 9px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: opacity .15s; }
+    .sl-confirm-btn:active { opacity: .75; }
+    .sl-confirm-cancel { background: var(--surface); border: 1px solid var(--border) !important; color: var(--text-muted); }
+    .sl-confirm-ok { background: var(--primary); color: #0C120E; }
     .sl-main { flex: 1; min-width: 0; }
     .sl-name { display: block; font-size: 15px; font-weight: 500; color: var(--text); }
     .sl-meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
@@ -1024,6 +1031,7 @@
     subfilters: {},
     user: null,
     authMode: 'login',
+    cartPending: null,         // id del ítem esperando confirmación inline
   };
 
   // ── Screens ──────────────────────────────────────────────────────────
@@ -1412,19 +1420,18 @@
   function saveCart() {
     try { localStorage.setItem(CART_KEY, JSON.stringify([...state.cartChecked])); } catch (e) {}
   }
-  async function toggleCart(id) {
+  // Primer toque: abre la barra de confirmación inline (opción A)
+  function toggleCart(id) {
     if (!state.cartChecked) state.cartChecked = loadCart();
+    // Si ya pendiente con otro ítem, cerrarlo primero
+    state.cartPending = (state.cartPending === id) ? null : id;
+    renderShoppingList();
+    renderSection();
+  }
 
-    // Si ya estaba marcado → desmarcá sin confirmación
-    if (state.cartChecked.has(id)) {
-      state.cartChecked.delete(id);
-      saveCart();
-      renderShoppingList();
-      renderSection();
-      return;
-    }
-
-    // Primera vez → pedir confirmación y actualizar stock
+  // Segundo toque: confirma, actualiza stock en Supabase
+  async function confirmCart(id) {
+    state.cartPending = null;
     const item = state.items.find(i => i.id === id);
     if (!item) return;
 
@@ -1433,20 +1440,19 @@
     const suggested = Math.ceil(Math.max(needed, monthly) * 1.1);
     const newQty = item.cantidad_actual + suggested;
 
-    const ok = confirm(
-      `¿Marcar "${item.nombre}" como comprado?\n\n` +
-      `Stock actual: ${item.cantidad_actual} ${item.unidad}\n` +
-      `Se sumará: +${suggested} ${item.unidad}\n` +
-      `Nuevo stock: ${newQty} ${item.unidad}`
-    );
-    if (!ok) return;
-
     const { error } = await sb.from('items').update({ cantidad_actual: newQty }).eq('id', id);
     if (error) { toast('Error al actualizar el stock', 'error'); return; }
 
     item.cantidad_actual = newQty;
     render();
     toast(`✓ ${item.nombre} — stock actualizado a ${newQty} ${item.unidad}`, 'success');
+  }
+
+  // Cancelar: cierra la barra sin hacer nada
+  function cancelCart() {
+    state.cartPending = null;
+    renderShoppingList();
+    renderSection();
   }
 
   function renderShoppingList() {
@@ -1510,17 +1516,32 @@
         ? `<span class="sl-tag sl-tag-critical">${SL_ICON_ALERT} Sin stock</span>`
         : `<span class="sl-tag sl-tag-low">${SL_ICON_DOWN} Bajo</span>`;
 
-      html += `<button type="button" class="sl-row${on ? ' checked' : ''}" onclick="toggleCart('${item.id}')">
-        <span class="sl-check">${on ? SL_ICON_CHECK : ''}</span>
-        <span class="sl-main">
-          <span class="sl-name">${escHtml(item.nombre)}</span>
-          <span class="sl-meta">${tag}<span class="sl-meta-text">tenés ${item.cantidad_actual} · mín ${item.cantidad_minima} ${item.unidad}</span></span>
-        </span>
-        <span class="sl-qty">
-          <span class="sl-qty-num">${suggested}</span>
-          <span class="sl-qty-unit">${item.unidad}</span>
-        </span>
-      </button>`;
+      const isPending = state.cartPending === item.id;
+
+      if (isPending) {
+        // Barra de confirmación inline (opción A: dos toques)
+        html += `<div class="sl-row-confirm">
+          <span class="sl-confirm-label">¿Ya lo pusiste en el carrito?</span>
+          <button type="button" class="sl-confirm-btn sl-confirm-cancel" onclick="cancelCart()" aria-label="Cancelar">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          </button>
+          <button type="button" class="sl-confirm-btn sl-confirm-ok" onclick="confirmCart('${item.id}')" aria-label="Confirmar">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.5 3.5L13 4"/></svg>
+          </button>
+        </div>`;
+      } else {
+        html += `<button type="button" class="sl-row${on ? ' checked' : ''}" onclick="toggleCart('${item.id}')">
+          <span class="sl-check">${on ? SL_ICON_CHECK : ''}</span>
+          <span class="sl-main">
+            <span class="sl-name">${escHtml(item.nombre)}</span>
+            <span class="sl-meta">${tag}<span class="sl-meta-text">tenés ${item.cantidad_actual} · mín ${item.cantidad_minima} ${item.unidad}</span></span>
+          </span>
+          <span class="sl-qty">
+            <span class="sl-qty-num">${suggested}</span>
+            <span class="sl-qty-unit">${item.unidad}</span>
+          </span>
+        </button>`;
+      }
     });
 
     exportLines.push('', `Generado: ${new Date().toLocaleString('es-AR')}`);
