@@ -1958,17 +1958,21 @@
   // Envolver en IIFE async para poder usar await sin top-level await (que rompe en scripts normales)
   // Si el SDK no cargó, la pantalla de auth ya es visible por defecto — no hacer nada más
   if (sb) (async () => {
-    showScreen('loading');
+    // ── Fast path: chequeo sincrónico de localStorage ───────────────────────
+    // Supabase v2 guarda la sesión en 'sb-{projectRef}-auth-token'.
+    // Si no hay nada ahí, no tiene sentido mostrar el loader ni esperar a la red:
+    // la pantalla de auth ya es visible por CSS, simplemente la confirmamos.
+    const projectRef = SUPABASE_URL.replace('https://', '').split('.')[0];
+    const STORAGE_KEY = 'sb-' + projectRef + '-auth-token';
+    let hasStoredSession = false;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      hasStoredSession = !!(raw && JSON.parse(raw)?.access_token);
+    } catch(e) {}
 
-    // Timeout duro: si en 3s no pasó nada, mostrar login
-    const hardTimeout = setTimeout(() => {
-      if (!appStarted) showScreen('auth');
-    }, 3000);
-
-    // Listener para cambios de sesión (login, logout, token refresh)
+    // Listener siempre activo: maneja login, logout y token refresh futuros
     sb.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user && !appStarted) {
-        clearTimeout(hardTimeout);
         await startApp(session.user);
       }
       if (event === 'SIGNED_OUT') {
@@ -1979,19 +1983,36 @@
       }
     });
 
-    // getSession() explícito — más confiable que esperar solo el listener
+    if (!hasStoredSession) {
+      // Sin sesión guardada → auth instantáneo, sin loader, sin round-trip de red
+      showScreen('auth');
+      return;
+    }
+
+    // ── Slow path: hay sesión guardada → verificar con Supabase ────────────
+    showScreen('loading');
+
+    // Safety net: si getSession() cuelga por pérdida total de red, mostrar auth.
+    // El try/catch de abajo cubre los casos normales; esto es solo para timeouts
+    // del runtime (muy improbable pero posible en conexiones extremadamente lentas).
+    const hardTimeout = setTimeout(() => {
+      if (!appStarted) showScreen('auth');
+    }, 5000);
+
+    // getSession() lee de localStorage (sin red si el token no expiró).
+    // Si el token expiró, Supabase hace un refresh silencioso (~1 round-trip).
     try {
       const { data: { session } } = await sb.auth.getSession();
+      clearTimeout(hardTimeout);
       if (session?.user) {
-        clearTimeout(hardTimeout);
         await startApp(session.user);
       } else {
-        clearTimeout(hardTimeout);
+        // Token en localStorage pero rechazado por Supabase (expirado sin refresh_token)
         showScreen('auth');
       }
     } catch(e) {
       clearTimeout(hardTimeout);
-      showScreen('auth');
+      if (!appStarted) showScreen('auth');
     }
   })();
 </script>
