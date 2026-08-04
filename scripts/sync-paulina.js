@@ -215,8 +215,17 @@ async function sincronizarConInventario(ingredientes) {
 
   const mapaExistentes = new Map((existentes || []).map(i => [i.nombre.toLowerCase(), i]));
 
-  const nuevos = ingredientes.filter(i => !mapaExistentes.has(i.nombre.toLowerCase()));
-  const aActualizar = ingredientes.filter(i => mapaExistentes.has(i.nombre.toLowerCase()));
+  // Deduplicar por nombre (la lista de Paulina repite ingredientes entre recetas)
+  const vistos = new Set();
+  const ingredientesUnicos = ingredientes.filter(i => {
+    const key = i.nombre.toLowerCase();
+    if (vistos.has(key)) return false;
+    vistos.add(key);
+    return true;
+  });
+
+  const nuevos = ingredientesUnicos.filter(i => !mapaExistentes.has(i.nombre.toLowerCase()));
+  const aActualizar = ingredientesUnicos.filter(i => mapaExistentes.has(i.nombre.toLowerCase()));
 
   console.log(`📦 ${ingredientes.length} ingredientes — ${aActualizar.length} ya en inventario, ${nuevos.length} nuevos`);
 
