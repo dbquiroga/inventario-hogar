@@ -148,46 +148,31 @@ async function obtenerListaCompras() {
 
     await page.goto(actual.href, { waitUntil: 'networkidle' });
 
-    // 3. Extraer lista de compras
-    const listaTexto = await page.evaluate(() => {
-      // Estrategia 1: buscar heading/elemento que diga "lista de compras"
-      const todos = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,strong,b,span'));
-      const heading = todos.find(el =>
-        /lista de compras/i.test(el.textContent) && el.textContent.trim().length < 60
-      );
+    // 3. Extraer lista de compras del contenedor "Lista compra general"
+    // Estructura: [data-nombre="Lista compra general"] label
+    // Texto de cada label: "1 paquete de arroz (vas a usar ½ taza)", "3 huevos", etc.
+    const items = await page.evaluate(() => {
+      const contenedor = document.querySelector('[data-nombre="Lista compra general"]');
+      if (!contenedor) return null;
 
-      if (heading) {
-        // Recolectar todos los <li> o <p> que vienen después del heading
-        const items = [];
-        let el = heading.nextElementSibling || heading.parentElement.nextElementSibling;
-        let intentos = 0;
-        while (el && intentos < 20) {
-          // Parar si llegamos a otro heading de sección
-          if (/recetas|lunes|martes|miércoles|jueves|viernes/i.test(el.textContent) &&
-              /^h[1-4]$/i.test(el.tagName)) break;
-          const lis = el.querySelectorAll('li');
-          if (lis.length) {
-            lis.forEach(li => items.push(li.textContent.trim()));
-          } else if (el.tagName === 'P' || el.tagName === 'LI') {
-            const t = el.textContent.trim();
-            if (t) items.push(t);
-          }
-          el = el.nextElementSibling;
-          intentos++;
-        }
-        if (items.length) return items.join('\n');
-      }
-
-      // Estrategia 2: todos los <li> de la página (frecuente en recetas)
-      const lis = Array.from(document.querySelectorAll('li'));
-      if (lis.length) return lis.map(li => li.textContent.trim()).filter(t => t).join('\n');
-
-      // Fallback: texto completo
-      return document.body.innerText;
+      return Array.from(contenedor.querySelectorAll('label'))
+        .map(label => {
+          let texto = label.textContent.trim();
+          // Eliminar la aclaración de uso: "(vas a usar X)", "(opcional - vas a usar X)"
+          texto = texto.replace(/\s*\((?:opcional\s*[-–]\s*)?vas a usar[^)]*\)/gi, '').trim();
+          // Eliminar "(opcional)"
+          texto = texto.replace(/\s*\(opcional\)/gi, '').trim();
+          return texto;
+        })
+        .filter(t => t.length > 1);
     });
 
-    console.log(`📋 Lista extraída (${listaTexto.split('\n').length} líneas)`);
-    return listaTexto;
+    if (!items) {
+      throw new Error('No encontré el contenedor "Lista compra general". Revisá que el login haya funcionado y que estés en la página del menú semanal.');
+    }
+
+    console.log(`📋 Lista extraída (${items.length} ítems)`);
+    return items.join('\n');
 
   } finally {
     await browser.close();
