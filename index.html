@@ -499,6 +499,8 @@
     .sl-price-input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 15px; color: var(--text); font-family: inherit; outline: none; min-width: 0; }
     .sl-price-input:focus { border-color: var(--primary); }
     .sl-price-input::placeholder { color: var(--text-muted); }
+    .sl-qty-input { width: 72px; flex-shrink: 0; }
+    .sl-price-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
     /* Botón "Ver gastos" */
     .sl-gastos-btn { display: flex; align-items: center; gap: 6px; background: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; font-family: inherit; transition: border-color .15s, color .15s; }
     .sl-gastos-btn:hover { border-color: var(--primary); color: var(--primary); }
@@ -1489,41 +1491,46 @@
     renderSection();
   }
 
-  // Segundo toque: confirma, actualiza stock en Supabase y guarda precio
+  // Segundo toque: confirma, actualiza stock en Supabase y guarda cantidad + precio
   async function confirmCart(id) {
+    const qtyInput   = document.getElementById('sl-qty-input');
     const priceInput = document.getElementById('sl-price-input');
-    const precio = priceInput ? parseFloat(priceInput.value) || null : null;
-    state.cartPending = null;
 
     const item = state.items.find(i => i.id === id);
     if (!item) return;
 
-    const needed = Math.max(0, item.cantidad_minima - item.cantidad_actual);
-    const monthly = item.consumo_mensual || 0;
+    // Calcular cantidad sugerida como fallback
+    const needed    = Math.max(0, item.cantidad_minima - item.cantidad_actual);
+    const monthly   = item.consumo_mensual || 0;
     const suggested = Math.ceil(Math.max(needed, monthly) * 1.1);
-    const newQty = item.cantidad_actual + suggested;
 
+    // Usar la cantidad ingresada, o la sugerida si está vacía
+    const cantidadComprada = qtyInput ? (parseFloat(qtyInput.value) || suggested) : suggested;
+    const precio = priceInput ? (parseFloat(priceInput.value) || null) : null;
+
+    state.cartPending = null;
+
+    const newQty = item.cantidad_actual + cantidadComprada;
     const { error } = await sb.from('items').update({ cantidad_actual: newQty }).eq('id', id);
     if (error) { toast('Error al actualizar el stock', 'error'); return; }
 
     item.cantidad_actual = newQty;
 
-    // Guardar en historial si se ingresó un precio
-    if (precio && precio > 0) {
-      saveCompraHistory({
-        itemId: item.id,
-        nombre: item.nombre,
-        categoria: item.categoria,
-        unidad: item.unidad,
-        cantidad: suggested,
-        precio,
-        fecha: new Date().toISOString(),
-      });
-    }
+    // Guardar en historial
+    saveCompraHistory({
+      itemId: item.id,
+      nombre: item.nombre,
+      categoria: item.categoria,
+      unidad: item.unidad,
+      cantidad: cantidadComprada,
+      precio,
+      fecha: new Date().toISOString(),
+    });
 
     render();
-    const msg = precio ? `✓ ${item.nombre} — $${precio.toLocaleString('es-AR')}` : `✓ ${item.nombre} — stock actualizado`;
-    toast(msg, 'success');
+    const partes = [`✓ ${item.nombre} — ${cantidadComprada} ${item.unidad}`];
+    if (precio) partes.push(`$${precio.toLocaleString('es-AR')}`);
+    toast(partes.join(' · '), 'success');
   }
 
   // Cancelar: cierra la barra sin hacer nada
@@ -1685,6 +1692,9 @@
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.5 3.5L13 4"/></svg>
           </button>
           <div class="sl-confirm-price">
+            <input type="number" id="sl-qty-input" class="sl-price-input sl-qty-input" placeholder="Cant." min="0" step="any" inputmode="decimal" value="${suggested}">
+            <span class="sl-price-symbol">${escHtml(item.unidad)}</span>
+            <div class="sl-price-sep"></div>
             <span class="sl-price-symbol">$</span>
             <input type="number" id="sl-price-input" class="sl-price-input" placeholder="Precio (opcional)" min="0" step="0.01" inputmode="decimal">
           </div>
