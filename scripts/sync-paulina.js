@@ -99,14 +99,20 @@ async function obtenerListaCompras() {
 
   try {
     // 1. Login
-    await page.goto('https://almacen.paulinacocina.net/ingresar/', { waitUntil: 'networkidle' });
+    // Usar la página de WooCommerce directa (más estable que la de Elementor)
+    await page.goto('https://almacen.paulinacocina.net/cuenta-usuario/', { waitUntil: 'networkidle' });
     console.log('🔑 Haciendo login...');
 
-    // El sitio tiene dos formularios (uno oculto en popup), usar el visible en la página
-    await page.fill('input[name="username"]', PAULINA_EMAIL);
-    await page.fill('input[name="password"]', PAULINA_PASSWORD);
-    await page.click('button[name="login"], input[name="login"][type="submit"]');
-    await page.waitForNavigation({ waitUntil: 'networkidle' });
+    // Esperar a que el formulario esté visible (Elementor/JS puede tardar en renderizarlo)
+    await page.waitForSelector('#username, input[name="username"]', { timeout: 15000 });
+
+    // WooCommerce usa id="username" e id="password"
+    await page.fill('#username', PAULINA_EMAIL);
+    await page.fill('#password', PAULINA_PASSWORD);
+
+    // El botón de submit del form WooCommerce
+    await page.click('button[name="login"], [name="login"]');
+    await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 });
 
     // Verificar login exitoso
     const url = page.url();
