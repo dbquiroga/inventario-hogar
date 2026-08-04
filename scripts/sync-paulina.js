@@ -124,11 +124,9 @@ async function obtenerListaCompras() {
     }
     console.log('✅ Login exitoso');
 
-    // 2. Encontrar la semana más reciente
-    // Patrón de URL: /menu/menu-semana-{N}/
-    // Buscar en la página /menu/ todos los links y quedarse con el mayor N
+    // 2. Ir al portal del menú semanal y encontrar la semana más reciente
     console.log('🔍 Buscando semana más reciente...');
-    await page.goto('https://almacen.paulinacocina.net/menu/', { waitUntil: 'networkidle' });
+    await page.goto('https://almacen.paulinacocina.net/menu-semanal/', { waitUntil: 'networkidle' });
 
     const semanas = await page.$$eval('a[href*="menu-semana-"]', els =>
       els.map(el => {
