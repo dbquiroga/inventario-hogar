@@ -115,54 +115,66 @@ async function obtenerListaCompras() {
     }
     console.log('✅ Login exitoso');
 
-    // 2. Ir al área de suscripciones / menú semanal
-    await page.goto('https://almacen.paulinacocina.net/mis-cursos-ebooks/', { waitUntil: 'networkidle' });
+    // 2. Encontrar la semana más reciente
+    // Patrón de URL: /menu/menu-semana-{N}/
+    // Buscar en la página /menu/ todos los links y quedarse con el mayor N
+    console.log('🔍 Buscando semana más reciente...');
+    await page.goto('https://almacen.paulinacocina.net/menu/', { waitUntil: 'networkidle' });
 
-    // Buscar link al menú semanal más reciente
-    const menuLink = await page.$('a[href*="menu-semana"], a[href*="menu_semana"]');
-    if (!menuLink) {
-      // Intentar desde la cuenta
-      await page.goto('https://almacen.paulinacocina.net/cuenta-usuario/', { waitUntil: 'networkidle' });
-    }
-
-    // Buscar todos los links que mencionen "semana"
-    const links = await page.$$eval(
-      'a',
-      els => els
-        .filter(el => /men[uú]\s*semana/i.test(el.textContent) || /semana-\d+/i.test(el.href))
-        .map(el => ({ texto: el.textContent.trim(), href: el.href }))
+    const semanas = await page.$$eval('a[href*="menu-semana-"]', els =>
+      els.map(el => {
+        const m = el.href.match(/menu-semana-(\d+)/);
+        return m ? { n: parseInt(m[1]), href: el.href, texto: el.textContent.trim() } : null;
+      }).filter(Boolean)
     );
 
-    if (!links.length) {
-      throw new Error('No encontré links al menú semanal. Puede que la estructura del sitio haya cambiado.');
+    if (!semanas.length) {
+      throw new Error('No encontré links de menú semanal en /menu/. Puede que el sitio haya cambiado.');
     }
 
-    // Tomar el más reciente (último en la lista)
-    const linkActual = links[links.length - 1];
-    console.log(`📅 Menú encontrado: ${linkActual.texto} → ${linkActual.href}`);
+    // La semana más reciente = número más alto
+    const actual = semanas.reduce((max, s) => s.n > max.n ? s : max, semanas[0]);
+    console.log(`📅 Semana más reciente: semana ${actual.n} → ${actual.href}`);
 
-    await page.goto(linkActual.href, { waitUntil: 'networkidle' });
+    await page.goto(actual.href, { waitUntil: 'networkidle' });
 
     // 3. Extraer lista de compras
-    // Buscar sección que mencione "lista de compras" y tomar su contenido
     const listaTexto = await page.evaluate(() => {
-      // Buscar heading que diga "lista de compras"
-      const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,p,strong'));
-      const heading = headings.find(el => /lista de compras/i.test(el.textContent));
-      if (!heading) return null;
+      // Estrategia 1: buscar heading/elemento que diga "lista de compras"
+      const todos = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,strong,b,span'));
+      const heading = todos.find(el =>
+        /lista de compras/i.test(el.textContent) && el.textContent.trim().length < 60
+      );
 
-      // Tomar el contenedor padre y extraer los items (li, p, etc.)
-      const container = heading.closest('section, div, article') || heading.parentElement;
-      const items = Array.from(container.querySelectorAll('li, p'));
-      return items.map(el => el.textContent.trim()).filter(t => t.length > 1).join('\n');
+      if (heading) {
+        // Recolectar todos los <li> o <p> que vienen después del heading
+        const items = [];
+        let el = heading.nextElementSibling || heading.parentElement.nextElementSibling;
+        let intentos = 0;
+        while (el && intentos < 20) {
+          // Parar si llegamos a otro heading de sección
+          if (/recetas|lunes|martes|miércoles|jueves|viernes/i.test(el.textContent) &&
+              /^h[1-4]$/i.test(el.tagName)) break;
+          const lis = el.querySelectorAll('li');
+          if (lis.length) {
+            lis.forEach(li => items.push(li.textContent.trim()));
+          } else if (el.tagName === 'P' || el.tagName === 'LI') {
+            const t = el.textContent.trim();
+            if (t) items.push(t);
+          }
+          el = el.nextElementSibling;
+          intentos++;
+        }
+        if (items.length) return items.join('\n');
+      }
+
+      // Estrategia 2: todos los <li> de la página (frecuente en recetas)
+      const lis = Array.from(document.querySelectorAll('li'));
+      if (lis.length) return lis.map(li => li.textContent.trim()).filter(t => t).join('\n');
+
+      // Fallback: texto completo
+      return document.body.innerText;
     });
-
-    if (!listaTexto) {
-      // Fallback: tomar todo el texto de la página y buscar patrones de ingredientes
-      console.warn('⚠️  No encontré sección "lista de compras" — usando texto completo de la página');
-      const textoCompleto = await page.evaluate(() => document.body.innerText);
-      return textoCompleto;
-    }
 
     console.log(`📋 Lista extraída (${listaTexto.split('\n').length} líneas)`);
     return listaTexto;
