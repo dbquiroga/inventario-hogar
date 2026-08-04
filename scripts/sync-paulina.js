@@ -1,0 +1,248 @@
+/**
+ * sync-paulina.js
+ * Extrae la lista de compras del menú semanal de Paulina Cocina
+ * y sincroniza los ingredientes con tu inventario en Supabase.
+ *
+ * Uso:
+ *   node scripts/sync-paulina.js
+ *
+ * Requiere .env con:
+ *   PAULINA_EMAIL, PAULINA_PASSWORD
+ *   SUPABASE_URL, SUPABASE_KEY
+ *   SUPABASE_USER_ID, INVENTARIO_PASSWORD
+ */
+
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+const { chromium } = require('playwright');
+const { createClient } = require('@supabase/supabase-js');
+
+// ── Validar variables de entorno ──────────────────────────────────────────────
+const {
+  PAULINA_EMAIL,
+  PAULINA_PASSWORD,
+  SUPABASE_URL,
+  SUPABASE_KEY,
+  SUPABASE_USER_ID,
+  INVENTARIO_PASSWORD,
+} = process.env;
+
+const missing = ['PAULINA_EMAIL','PAULINA_PASSWORD','SUPABASE_URL','SUPABASE_KEY','SUPABASE_USER_ID','INVENTARIO_PASSWORD']
+  .filter(k => !process.env[k]);
+if (missing.length) {
+  console.error('❌ Faltan variables en .env:', missing.join(', '));
+  process.exit(1);
+}
+
+// ── Clasificación de ingredientes por categoría ───────────────────────────────
+const CATEGORIA_REGLAS = [
+  {
+    categoria: 'Bebidas',
+    palabras: ['agua','jugo','vino','cerveza','gaseosa','bebida','leche','yogur','kefir','caldo','infusión','té','café','mate','sidra'],
+  },
+  {
+    categoria: 'Limpieza',
+    palabras: ['detergente','lavandina','esponja','jabón','trapo','papel','toalla','servilleta','bolsa de residuos','desengrasante'],
+  },
+  {
+    categoria: 'Herramientas',
+    palabras: ['papel film','papel aluminio','papel manteca','film','aluminio'],
+  },
+  {
+    categoria: 'Comida',
+    palabras: [], // default
+  },
+];
+
+function clasificar(nombre) {
+  const n = nombre.toLowerCase();
+  for (const { categoria, palabras } of CATEGORIA_REGLAS) {
+    if (palabras.some(p => n.includes(p))) return categoria;
+  }
+  return 'Comida';
+}
+
+// ── Parsear línea de ingrediente ──────────────────────────────────────────────
+// Formatos comunes: "2 kg de harina", "1 lata de tomates", "Sal a gusto", "3 huevos"
+const UNIDADES = ['kg','g','gr','gramos','ml','l','litro','litros','unidad','unidades',
+  'taza','tazas','cucharada','cucharadas','cucharadita','cucharaditas',
+  'lata','latas','paquete','paquetes','atado','atados','cabeza','cabezas',
+  'diente','dientes','rodaja','rodajas','hoja','hojas','rama','ramas'];
+
+function parsearIngrediente(linea) {
+  linea = linea.trim().replace(/^[-•*·]\s*/, '').trim();
+  if (!linea || linea.length < 2) return null;
+
+  // Intentar extraer cantidad y unidad del inicio: "2 kg de harina", "1/2 taza de azúcar"
+  const regex = new RegExp(
+    `^([\\d½⅓⅔¼¾]+(?:[\\.,][\\d]+)?(?:\\s*\\/\\s*[\\d]+)?)\\s*(${UNIDADES.join('|')})?\\s*(?:de\\s+)?(.+)$`,
+    'i'
+  );
+  const match = linea.match(regex);
+
+  if (match) {
+    const cantidad = parseFloat(match[1].replace(',', '.')) || 1;
+    const unidad = match[2] || 'unidades';
+    const nombre = match[3].trim();
+    return { nombre, cantidad, unidad };
+  }
+
+  // Sin cantidad — solo nombre
+  return { nombre: linea, cantidad: 1, unidad: 'unidades' };
+}
+
+// ── Scraping de Paulina Cocina ────────────────────────────────────────────────
+async function obtenerListaCompras() {
+  console.log('🌐 Abriendo Paulina Cocina...');
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({ locale: 'es-AR' });
+  const page = await context.newPage();
+
+  try {
+    // 1. Login
+    await page.goto('https://almacen.paulinacocina.net/ingresar/', { waitUntil: 'networkidle' });
+    console.log('🔑 Haciendo login...');
+
+    // El sitio tiene dos formularios (uno oculto en popup), usar el visible en la página
+    await page.fill('input[name="username"]', PAULINA_EMAIL);
+    await page.fill('input[name="password"]', PAULINA_PASSWORD);
+    await page.click('button[name="login"], input[name="login"][type="submit"]');
+    await page.waitForNavigation({ waitUntil: 'networkidle' });
+
+    // Verificar login exitoso
+    const url = page.url();
+    if (url.includes('ingresar') || url.includes('lost-password')) {
+      throw new Error('Login fallido — revisá PAULINA_EMAIL y PAULINA_PASSWORD en .env');
+    }
+    console.log('✅ Login exitoso');
+
+    // 2. Ir al área de suscripciones / menú semanal
+    await page.goto('https://almacen.paulinacocina.net/mis-cursos-ebooks/', { waitUntil: 'networkidle' });
+
+    // Buscar link al menú semanal más reciente
+    const menuLink = await page.$('a[href*="menu-semana"], a[href*="menu_semana"]');
+    if (!menuLink) {
+      // Intentar desde la cuenta
+      await page.goto('https://almacen.paulinacocina.net/cuenta-usuario/', { waitUntil: 'networkidle' });
+    }
+
+    // Buscar todos los links que mencionen "semana"
+    const links = await page.$$eval(
+      'a',
+      els => els
+        .filter(el => /men[uú]\s*semana/i.test(el.textContent) || /semana-\d+/i.test(el.href))
+        .map(el => ({ texto: el.textContent.trim(), href: el.href }))
+    );
+
+    if (!links.length) {
+      throw new Error('No encontré links al menú semanal. Puede que la estructura del sitio haya cambiado.');
+    }
+
+    // Tomar el más reciente (último en la lista)
+    const linkActual = links[links.length - 1];
+    console.log(`📅 Menú encontrado: ${linkActual.texto} → ${linkActual.href}`);
+
+    await page.goto(linkActual.href, { waitUntil: 'networkidle' });
+
+    // 3. Extraer lista de compras
+    // Buscar sección que mencione "lista de compras" y tomar su contenido
+    const listaTexto = await page.evaluate(() => {
+      // Buscar heading que diga "lista de compras"
+      const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,p,strong'));
+      const heading = headings.find(el => /lista de compras/i.test(el.textContent));
+      if (!heading) return null;
+
+      // Tomar el contenedor padre y extraer los items (li, p, etc.)
+      const container = heading.closest('section, div, article') || heading.parentElement;
+      const items = Array.from(container.querySelectorAll('li, p'));
+      return items.map(el => el.textContent.trim()).filter(t => t.length > 1).join('\n');
+    });
+
+    if (!listaTexto) {
+      // Fallback: tomar todo el texto de la página y buscar patrones de ingredientes
+      console.warn('⚠️  No encontré sección "lista de compras" — usando texto completo de la página');
+      const textoCompleto = await page.evaluate(() => document.body.innerText);
+      return textoCompleto;
+    }
+
+    console.log(`📋 Lista extraída (${listaTexto.split('\n').length} líneas)`);
+    return listaTexto;
+
+  } finally {
+    await browser.close();
+  }
+}
+
+// ── Insertar en Supabase ──────────────────────────────────────────────────────
+async function sincronizarConInventario(ingredientes) {
+  const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // Autenticar como el usuario para que RLS funcione
+  const { error: authError } = await sb.auth.signInWithPassword({
+    email: PAULINA_EMAIL,
+    password: INVENTARIO_PASSWORD,
+  });
+  if (authError) {
+    throw new Error(`Error autenticando en Supabase: ${authError.message}\nRevisá INVENTARIO_PASSWORD en .env`);
+  }
+
+  // Cargar ítems existentes para evitar duplicados
+  const { data: existentes } = await sb
+    .from('items')
+    .select('id, nombre')
+    .eq('user_id', SUPABASE_USER_ID);
+
+  const nombresExistentes = new Set((existentes || []).map(i => i.nombre.toLowerCase()));
+
+  const nuevos = ingredientes.filter(i => !nombresExistentes.has(i.nombre.toLowerCase()));
+  const yaExisten = ingredientes.length - nuevos.length;
+
+  console.log(`📦 ${ingredientes.length} ingredientes — ${yaExisten} ya en inventario, ${nuevos.length} nuevos`);
+
+  if (!nuevos.length) {
+    console.log('✅ Nada nuevo para agregar');
+    return { insertados: 0, omitidos: yaExisten };
+  }
+
+  // Insertar nuevos
+  const rows = nuevos.map(({ nombre, cantidad, unidad }) => ({
+    user_id: SUPABASE_USER_ID,
+    nombre,
+    categoria: clasificar(nombre),
+    cantidad_actual: 0,
+    cantidad_minima: cantidad,
+    consumo_mensual: 0,
+    unidad,
+  }));
+
+  const { error } = await sb.from('items').insert(rows);
+  if (error) throw new Error(`Error insertando en Supabase: ${error.message}`);
+
+  console.log(`✅ ${rows.length} ítems agregados al inventario`);
+  rows.forEach(r => console.log(`   + ${r.nombre} (${r.categoria})`));
+
+  return { insertados: rows.length, omitidos: yaExisten };
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+(async () => {
+  try {
+    const textoLista = await obtenerListaCompras();
+
+    const ingredientes = textoLista
+      .split('\n')
+      .map(parsearIngrediente)
+      .filter(Boolean)
+      .filter(i => i.nombre.length > 1);
+
+    if (!ingredientes.length) {
+      console.error('❌ No se encontraron ingredientes en la lista');
+      process.exit(1);
+    }
+
+    const { insertados, omitidos } = await sincronizarConInventario(ingredientes);
+    console.log(`\n🎉 Sincronización completa: ${insertados} agregados, ${omitidos} ya existían`);
+  } catch (err) {
+    console.error('\n❌ Error:', err.message);
+    process.exit(1);
+  }
+})();
