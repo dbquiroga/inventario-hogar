@@ -128,15 +128,18 @@ async function obtenerListaCompras() {
     console.log('🔍 Buscando semana más reciente...');
     await page.goto('https://almacen.paulinacocina.net/menu-semanal/', { waitUntil: 'networkidle' });
 
-    const semanas = await page.$$eval('a[href*="menu-semana-"]', els =>
+    // Esperar a que las cards de Elementor Loop carguen
+    await page.waitForSelector('.e-loop-item a[href*="menu-semana-"]', { timeout: 15000 });
+
+    const semanas = await page.$$eval('.e-loop-item a[href*="menu-semana-"]', els =>
       els.map(el => {
         const m = el.href.match(/menu-semana-(\d+)/);
-        return m ? { n: parseInt(m[1]), href: el.href, texto: el.textContent.trim() } : null;
+        return m ? { n: parseInt(m[1]), href: el.href.split('?')[0] } : null;
       }).filter(Boolean)
     );
 
     if (!semanas.length) {
-      throw new Error('No encontré links de menú semanal en /menu/. Puede que el sitio haya cambiado.');
+      throw new Error('No encontré cards de menú semanal. Puede que el login no haya funcionado.');
     }
 
     // La semana más reciente = número más alto
