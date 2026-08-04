@@ -161,6 +161,40 @@
     }
     .auth-error.visible { display: block; }
 
+    .auth-link {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 4px;
+      transition: color .15s;
+    }
+    .auth-link:hover { color: var(--primary); }
+
+    /* ── Recovery / New-password screens ── */
+    #recoveryScreen, #newPasswordScreen {
+      display: none;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    #recoveryScreen.visible, #newPasswordScreen.visible { display: flex; }
+
+    .auth-success {
+      display: none;
+      background: var(--success-light);
+      border: 1px solid var(--success);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--success);
+      margin-top: 12px;
+    }
+    .auth-success.visible { display: block; }
+
     /* ── App ── */
     #appScreen { display: none; }
     #appScreen.visible { display: block; }
@@ -809,7 +843,58 @@
 
     <button class="auth-btn" id="authBtn" onclick="doAuth()">Ingresar</button>
 
+    <div style="text-align:center; margin-top:10px;">
+      <button class="auth-link" onclick="showScreen('recovery')">¿Olvidaste tu contraseña?</button>
+    </div>
+
     <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
+<!-- Recovery screen -->
+<div id="recoveryScreen">
+  <div class="auth-card">
+    <div class="auth-logo">🔑</div>
+    <div class="auth-title">Recuperar contraseña</div>
+    <div class="auth-sub">Ingresá tu email y te enviamos un link para resetearla</div>
+
+    <div class="auth-field">
+      <label>Email</label>
+      <input type="email" id="recoveryEmail" placeholder="tu@email.com" autocomplete="email"
+        onkeydown="if(event.key==='Enter') doSendRecovery()" />
+    </div>
+
+    <button class="auth-btn" id="recoveryBtn" onclick="doSendRecovery()">Enviar link</button>
+
+    <div class="auth-success" id="recoverySuccess"></div>
+    <div class="auth-error" id="recoveryError"></div>
+
+    <div style="text-align:center; margin-top:14px;">
+      <button class="auth-link" onclick="showScreen('auth')">← Volver al login</button>
+    </div>
+  </div>
+</div>
+
+<!-- New password screen -->
+<div id="newPasswordScreen">
+  <div class="auth-card">
+    <div class="auth-logo">🔒</div>
+    <div class="auth-title">Nueva contraseña</div>
+    <div class="auth-sub">Elegí una contraseña segura para tu cuenta</div>
+
+    <div class="auth-field">
+      <label>Nueva contraseña</label>
+      <input type="password" id="newPassword" placeholder="••••••••" autocomplete="new-password" />
+    </div>
+    <div class="auth-field">
+      <label>Confirmar contraseña</label>
+      <input type="password" id="confirmPassword" placeholder="••••••••" autocomplete="new-password"
+        onkeydown="if(event.key==='Enter') doUpdatePassword()" />
+    </div>
+
+    <button class="auth-btn" id="newPasswordBtn" onclick="doUpdatePassword()">Guardar contraseña</button>
+
+    <div class="auth-error" id="newPasswordError"></div>
   </div>
 </div>
 
@@ -1089,6 +1174,8 @@
     document.getElementById('loadingScreen').style.display = name === 'loading' ? 'flex' : 'none';
     document.getElementById('authScreen').classList.toggle('hidden', name !== 'auth');
     document.getElementById('appScreen').classList.toggle('visible', name === 'app');
+    document.getElementById('recoveryScreen').classList.toggle('visible', name === 'recovery');
+    document.getElementById('newPasswordScreen').classList.toggle('visible', name === 'newPassword');
   }
 
   // ── Auth ──────────────────────────────────────────────────────────────
@@ -1149,6 +1236,89 @@
     if (msg.includes('User already registered')) return 'Este email ya está registrado';
     if (msg.includes('Password should')) return 'La contraseña debe tener al menos 6 caracteres';
     return msg;
+  }
+
+  // ── Password recovery ─────────────────────────────────────────────────
+  async function doSendRecovery() {
+    const email = document.getElementById('recoveryEmail').value.trim();
+    const btn = document.getElementById('recoveryBtn');
+    const errEl = document.getElementById('recoveryError');
+    const okEl = document.getElementById('recoverySuccess');
+
+    errEl.classList.remove('visible');
+    okEl.classList.remove('visible');
+
+    if (!email) {
+      errEl.textContent = 'Ingresá tu email';
+      errEl.classList.add('visible');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Enviando…';
+
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.href.split('#')[0]
+    });
+
+    btn.disabled = false;
+    btn.textContent = 'Enviar link';
+
+    if (error) {
+      errEl.textContent = translateAuthError(error.message);
+      errEl.classList.add('visible');
+    } else {
+      okEl.textContent = '✓ Revisá tu email — te enviamos el link de recuperación';
+      okEl.classList.add('visible');
+      btn.disabled = true;
+    }
+  }
+
+  async function doUpdatePassword() {
+    const newPwd = document.getElementById('newPassword').value;
+    const confirmPwd = document.getElementById('confirmPassword').value;
+    const btn = document.getElementById('newPasswordBtn');
+    const errEl = document.getElementById('newPasswordError');
+
+    errEl.classList.remove('visible');
+
+    if (!newPwd || !confirmPwd) {
+      errEl.textContent = 'Completá ambos campos';
+      errEl.classList.add('visible');
+      return;
+    }
+    if (newPwd !== confirmPwd) {
+      errEl.textContent = 'Las contraseñas no coinciden';
+      errEl.classList.add('visible');
+      return;
+    }
+    if (newPwd.length < 6) {
+      errEl.textContent = 'La contraseña debe tener al menos 6 caracteres';
+      errEl.classList.add('visible');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Guardando…';
+
+    const { error } = await sb.auth.updateUser({ password: newPwd });
+
+    btn.disabled = false;
+    btn.textContent = 'Guardar contraseña';
+
+    if (error) {
+      errEl.textContent = translateAuthError(error.message);
+      errEl.classList.add('visible');
+    } else {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      toast('✓ Contraseña actualizada correctamente', 'success');
+      const { data: { session } } = await sb.auth.getSession();
+      if (session?.user) {
+        await startApp(session.user);
+      } else {
+        showScreen('auth');
+      }
+    }
   }
 
   async function doLogout() {
@@ -1982,8 +2152,18 @@
       hasStoredSession = !!(raw && JSON.parse(raw)?.access_token);
     } catch(e) {}
 
+    // ── Recovery path: detectar hash antes de registrar el listener ──────────
+    // Supabase redirige con #access_token=...&type=recovery; el SDK lo procesará
+    // y disparará PASSWORD_RECOVERY en onAuthStateChange (registrado justo abajo).
+    const _hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const _isRecovery = _hashParams.get('type') === 'recovery';
+
     // Listener siempre activo: maneja login, logout y token refresh futuros
     sb.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        showScreen('newPassword');
+        return;
+      }
       if (event === 'SIGNED_IN' && session?.user && !appStarted) {
         await startApp(session.user);
       }
@@ -1994,6 +2174,13 @@
         showScreen('auth');
       }
     });
+
+    // Si hay token de recuperación en el hash: mostrar pantalla de nueva contraseña
+    // y salir del flujo normal (el listener se encarga de confirmar el evento).
+    if (_isRecovery) {
+      showScreen('newPassword');
+      return;
+    }
 
     if (!hasStoredSession) {
       // Sin sesión guardada → auth instantáneo, sin loader, sin round-trip de red
