@@ -207,42 +207,49 @@ async function sincronizarConInventario(ingredientes) {
     throw new Error(`Error autenticando en Supabase: ${authError.message}\nRevisá INVENTARIO_PASSWORD en .env`);
   }
 
-  // Cargar ítems existentes para evitar duplicados
+  // Cargar ítems existentes
   const { data: existentes } = await sb
     .from('items')
-    .select('id, nombre')
+    .select('id, nombre, cantidad_minima')
     .eq('user_id', SUPABASE_USER_ID);
 
-  const nombresExistentes = new Set((existentes || []).map(i => i.nombre.toLowerCase()));
+  const mapaExistentes = new Map((existentes || []).map(i => [i.nombre.toLowerCase(), i]));
 
-  const nuevos = ingredientes.filter(i => !nombresExistentes.has(i.nombre.toLowerCase()));
-  const yaExisten = ingredientes.length - nuevos.length;
+  const nuevos = ingredientes.filter(i => !mapaExistentes.has(i.nombre.toLowerCase()));
+  const aActualizar = ingredientes.filter(i => mapaExistentes.has(i.nombre.toLowerCase()));
 
-  console.log(`📦 ${ingredientes.length} ingredientes — ${yaExisten} ya en inventario, ${nuevos.length} nuevos`);
+  console.log(`📦 ${ingredientes.length} ingredientes — ${aActualizar.length} ya en inventario, ${nuevos.length} nuevos`);
 
-  if (!nuevos.length) {
-    console.log('✅ Nada nuevo para agregar');
-    return { insertados: 0, omitidos: yaExisten };
+  // Insertar nuevos (cantidad_actual=0 → aparecen en lista de compras)
+  if (nuevos.length) {
+    const rows = nuevos.map(({ nombre, cantidad, unidad }) => ({
+      user_id: SUPABASE_USER_ID,
+      nombre,
+      categoria: clasificar(nombre),
+      cantidad_actual: 0,
+      cantidad_minima: Math.max(1, cantidad),
+      consumo_mensual: 0,
+      unidad,
+    }));
+    const { error } = await sb.from('items').insert(rows);
+    if (error) throw new Error(`Error insertando en Supabase: ${error.message}`);
+    console.log(`✅ ${rows.length} ítems nuevos agregados:`);
+    rows.forEach(r => console.log(`   + ${r.nombre} (${r.categoria})`));
   }
 
-  // Insertar nuevos
-  const rows = nuevos.map(({ nombre, cantidad, unidad }) => ({
-    user_id: SUPABASE_USER_ID,
-    nombre,
-    categoria: clasificar(nombre),
-    cantidad_actual: 0,
-    cantidad_minima: cantidad,
-    consumo_mensual: 0,
-    unidad,
-  }));
+  // Resetear cantidad_actual=0 en los que ya existen → aparecen en lista de compras
+  if (aActualizar.length) {
+    const ids = aActualizar.map(i => mapaExistentes.get(i.nombre.toLowerCase()).id);
+    const { error } = await sb
+      .from('items')
+      .update({ cantidad_actual: 0 })
+      .in('id', ids);
+    if (error) throw new Error(`Error actualizando stock en Supabase: ${error.message}`);
+    console.log(`🔄 ${ids.length} ítems existentes puestos en lista de compras:`);
+    aActualizar.forEach(i => console.log(`   ~ ${i.nombre}`));
+  }
 
-  const { error } = await sb.from('items').insert(rows);
-  if (error) throw new Error(`Error insertando en Supabase: ${error.message}`);
-
-  console.log(`✅ ${rows.length} ítems agregados al inventario`);
-  rows.forEach(r => console.log(`   + ${r.nombre} (${r.categoria})`));
-
-  return { insertados: rows.length, omitidos: yaExisten };
+  return { insertados: nuevos.length, actualizados: aActualizar.length };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -261,8 +268,8 @@ async function sincronizarConInventario(ingredientes) {
       process.exit(1);
     }
 
-    const { insertados, omitidos } = await sincronizarConInventario(ingredientes);
-    console.log(`\n🎉 Sincronización completa: ${insertados} agregados, ${omitidos} ya existían`);
+    const { insertados, actualizados } = await sincronizarConInventario(ingredientes);
+    console.log(`\n🎉 Sincronización completa: ${insertados} agregados, ${actualizados} puestos en lista de compras`);
   } catch (err) {
     console.error('\n❌ Error:', err.message);
     process.exit(1);
