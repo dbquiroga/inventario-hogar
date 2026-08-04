@@ -93,7 +93,8 @@ function parsearIngrediente(linea) {
 // ── Scraping de Paulina Cocina ────────────────────────────────────────────────
 async function obtenerListaCompras() {
   console.log('🌐 Abriendo Paulina Cocina...');
-  const browser = await chromium.launch({ headless: true });
+  const debug = process.argv.includes('--debug');
+  const browser = await chromium.launch({ headless: !debug, slowMo: debug ? 500 : 0 });
   const context = await browser.newContext({ locale: 'es-AR' });
   const page = await context.newPage();
 
@@ -110,9 +111,11 @@ async function obtenerListaCompras() {
     await page.fill('#username', PAULINA_EMAIL);
     await page.fill('#password', PAULINA_PASSWORD);
 
-    // El botón de submit del form WooCommerce
-    await page.click('button[name="login"], [name="login"]');
-    await page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 });
+    // Click + waitForNavigation en paralelo para no perder el evento de navegación
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20000 }),
+      page.click('button[name="login"]'),
+    ]);
 
     // Verificar login exitoso
     const url = page.url();
