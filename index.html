@@ -7,8 +7,11 @@
   <!-- Preconnect: establece DNS+TCP+TLS con jsDelivr mientras se parsea el <head> -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-  <!-- Preload: empieza a descargar el SDK de Supabase antes de llegar al <script> -->
-  <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" crossorigin>
+  <!-- Preload: empieza a descargar el SDK de Supabase antes de llegar al <script>.
+       Sin crossorigin: debe coincidir con el <script> de abajo, que tampoco lo lleva.
+       Si no coinciden, el navegador descarga el archivo dos veces y avisa que el
+       preload "no se usó". -->
+  <link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -2122,6 +2125,17 @@
 
   let appStarted = false;
 
+  // El SDK de Supabase no impone timeout sobre fetch: si la red se corta a mitad
+  // de una request, la promesa queda colgada para siempre. Sin esto, un await
+  // sobre esa promesa deja la pantalla de carga girando sin salida posible.
+  function withTimeout(promise, ms, label) {
+    let timer;
+    const limit = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Timeout: ' + label)), ms);
+    });
+    return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+  }
+
   async function startApp(user) {
     if (appStarted) return;
     appStarted = true;
@@ -2129,12 +2143,16 @@
     document.getElementById('userEmail').textContent = user.email;
     showScreen('loading');
     try {
-      await loadItems();
+      await withTimeout(loadItems(), 15000, 'carga de ítems');
     } catch(e) {
-      toast('Error al cargar datos. Recargá la página.', 'error');
+      console.error('Falló la carga inicial:', e);
+      toast('No se pudieron cargar los datos. Revisá tu conexión y recargá.', 'error');
+    } finally {
+      // Pase lo que pase, salir del loader: un spinner sin salida deja la app
+      // inusable y sin acceso siquiera al botón de cerrar sesión.
+      showScreen('app');
+      render();
     }
-    showScreen('app');
-    render();
   }
 
   // Envolver en IIFE async para poder usar await sin top-level await (que rompe en scripts normales)
