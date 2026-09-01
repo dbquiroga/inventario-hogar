@@ -1,0 +1,44 @@
+name: Sincronizar lista de Paulina Cocina
+
+on:
+  schedule:
+    # Viernes 15:00 UTC = 12:00 en Argentina (UTC-3).
+    # GitHub interpreta el cron siempre en UTC, no ajusta por horario local.
+    # Para cambiar la hora, corré el número de la izquierda: 0 18 * * 5 = 15:00 ART.
+    - cron: '0 15 * * 5'
+  # Permite dispararlo a mano desde la pestaña Actions sin esperar al viernes
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    # El scraping depende de una web de terceros: si cambia el HTML, el job
+    # no debe quedar colgado ocupando un runner.
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # @supabase/* 2.112 declara engines.node >=22; con 20 npm tira EBADENGINE
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar Chromium para Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Sincronizar inventario
+        env:
+          PAULINA_EMAIL: ${{ secrets.PAULINA_EMAIL }}
+          PAULINA_PASSWORD: ${{ secrets.PAULINA_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_USER_ID: ${{ secrets.SUPABASE_USER_ID }}
+          INVENTARIO_PASSWORD: ${{ secrets.INVENTARIO_PASSWORD }}
+          # Opcional: solo si tu email del inventario difiere del de Paulina Cocina
+          INVENTARIO_EMAIL: ${{ secrets.INVENTARIO_EMAIL }}
+        run: npm run sync-paulina

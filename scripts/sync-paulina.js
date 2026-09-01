@@ -24,6 +24,7 @@ const {
   SUPABASE_KEY,
   SUPABASE_USER_ID,
   INVENTARIO_PASSWORD,
+  INVENTARIO_EMAIL, // opcional: solo si difiere de PAULINA_EMAIL
 } = process.env;
 
 const missing = ['PAULINA_EMAIL','PAULINA_PASSWORD','SUPABASE_URL','SUPABASE_KEY','SUPABASE_USER_ID','INVENTARIO_PASSWORD']
@@ -40,7 +41,11 @@ const CATEGORIA_REGLAS = [
     palabras: ['agua','jugo','vino','cerveza','gaseosa','bebida','leche','yogur','kefir','caldo','infusión','té','café','mate','sidra'],
   },
   {
-    categoria: 'Limpieza',
+    // El nombre debe coincidir exacto con DEFAULT_SUBCATS de index.html: la app
+    // arma pestañas y paneles iterando esas categorías, así que un ítem guardado
+    // como 'Limpieza' queda invisible en Inventario (aunque sí sale en la lista
+    // de compras, que no filtra por categoría).
+    categoria: 'Artículos de Limpieza',
     palabras: ['detergente','lavandina','esponja','jabón','trapo','papel','toalla','servilleta','bolsa de residuos','desengrasante'],
   },
   {
@@ -183,9 +188,11 @@ async function obtenerListaCompras() {
 async function sincronizarConInventario(ingredientes) {
   const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  // Autenticar como el usuario para que RLS funcione
+  // Autenticar como el usuario para que RLS funcione.
+  // El email del inventario no tiene por qué ser el mismo que el de Paulina Cocina:
+  // si difieren, definir INVENTARIO_EMAIL en .env.
   const { error: authError } = await sb.auth.signInWithPassword({
-    email: PAULINA_EMAIL,
+    email: INVENTARIO_EMAIL || PAULINA_EMAIL,
     password: INVENTARIO_PASSWORD,
   });
   if (authError) {

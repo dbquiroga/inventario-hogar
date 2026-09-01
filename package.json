@@ -3,11 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "sync-paulina": "node scripts/sync-paulina.js"
+    "sync-paulina": "node scripts/sync-paulina.js",
+    "migrar-limpieza": "node scripts/migrar-categoria-limpieza.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "dotenv": "^16.4.5",
     "playwright": "^1.44.0"
+  },
+  "devDependencies": {
+    "acorn": "^8.18.0"
   }
 }
