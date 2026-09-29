@@ -28,6 +28,10 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
+      # Si el parser está roto, cortar antes de escribir en Supabase
+      - name: Tests unitarios del parser
+        run: npm test
+
       - name: Instalar Chromium para Playwright
         run: npx playwright install --with-deps chromium
 
@@ -42,3 +46,27 @@ jobs:
           # Opcional: solo si tu email del inventario difiere del de Paulina Cocina
           INVENTARIO_EMAIL: ${{ secrets.INVENTARIO_EMAIL }}
         run: npm run sync-paulina
+
+      # Árbitro determinístico: verifica contra Supabase que el inventario quedó
+      # como dice sync-report.json (sale con código 1 si algún criterio falla).
+      - name: Validar sincronización
+        env:
+          PAULINA_EMAIL: ${{ secrets.PAULINA_EMAIL }}
+          PAULINA_PASSWORD: ${{ secrets.PAULINA_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_USER_ID: ${{ secrets.SUPABASE_USER_ID }}
+          INVENTARIO_PASSWORD: ${{ secrets.INVENTARIO_PASSWORD }}
+          INVENTARIO_EMAIL: ${{ secrets.INVENTARIO_EMAIL }}
+        run: npm run validar-sync
+
+      # El reporte se sube aunque falle la sync o la validación, para diagnosticar.
+      # No contiene credenciales: solo semana, URL, líneas scrapeadas, nombres e ids.
+      - name: Subir reporte de sincronización
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sync-report
+          path: sync-report.json
+          if-no-files-found: warn
+          retention-days: 30

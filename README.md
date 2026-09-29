@@ -57,6 +57,34 @@ create policy "usuarios ven sus ítems" on items
   for all using (auth.uid() = user_id);
 ```
 
+## Sincronización con Paulina Cocina
+
+`scripts/sync-paulina.js` scrapea (Playwright) la "Lista compra general" del menú semanal más reciente de [Paulina Cocina](https://almacen.paulinacocina.net) y la marca en `items`. Corre solo cada viernes con GitHub Actions (`.github/workflows/sync-paulina.yml`) y también se puede disparar a mano desde la pestaña Actions.
+
+**Requisito:** correr una vez `supabase/migrations/20260928_paulina_origen.sql` en Supabase → SQL Editor. Si falta, la sync aborta con `Falta correr supabase/migrations/20260928_paulina_origen.sql en Supabase`.
+
+**Qué hace:**
+- Ítems que ya existen (match por nombre sin tildes/mayúsculas y tolerante a singular/plural): solo setea `paulina_semana`, `paulina_cantidad`, `paulina_unidad`, `paulina_texto` y `paulina_sync_at`. **Nunca toca `cantidad_actual`.**
+- Ítems nuevos: se insertan con `origen = 'paulina'`, stock y mínimo en 0 (no se duplican en la lista normal del hogar) y categoría automática.
+- Ítems de semanas anteriores: se desmarcan (`paulina_semana` y compañía en null). Correr dos veces la misma semana da el mismo resultado.
+- Ingredientes repetidos en la lista se agrupan: se suman si la unidad coincide; `paulina_texto` guarda todas las líneas originales.
+- Escribe `sync-report.json` (gitignored) con semana, URL, lo scrapeado, qué insertó/marcó/desmarcó y un snapshot de `cantidad_actual` previo.
+
+**Validación:** `scripts/validar-sync.js` es un árbitro determinístico que lee `sync-report.json`, consulta Supabase y verifica: lista con ≥ 5 ítems, todo lo scrapeado marcado con la semana, ningún ítem con otra semana, sin duplicados, categorías válidas en ítems creados y `cantidad_actual` intacta. Imprime PASS/FAIL por criterio y sale con código 1 si algo falla. En Actions corre después de la sync, y el reporte queda como artifact `sync-report`.
+
+```bash
+# .env en la raíz (gitignored): PAULINA_EMAIL, PAULINA_PASSWORD, SUPABASE_URL, SUPABASE_KEY,
+#                              SUPABASE_USER_ID, INVENTARIO_PASSWORD [, INVENTARIO_EMAIL]
+npm ci
+npx playwright install chromium
+npm test                    # tests unitarios del parser (node:test, sin red)
+npm run sync-paulina:dry    # scrapea e imprime el plan sin escribir en Supabase
+npm run sync-paulina        # sincroniza
+npm run validar-sync        # valida la última sync
+```
+
+En GitHub, las mismas variables van en Settings → Secrets and variables → Actions.
+
 ## Desarrollo local
 
 Cloná el repo y abrí `index.html` directo en el browser — no hay build step ni servidor necesario.
