@@ -4,7 +4,10 @@
   "private": true,
   "scripts": {
     "sync-paulina": "node scripts/sync-paulina.js",
-    "migrar-limpieza": "node scripts/migrar-categoria-limpieza.js"
+    "sync-paulina:dry": "node scripts/sync-paulina.js --dry-run",
+    "validar-sync": "node scripts/validar-sync.js",
+    "migrar-limpieza": "node scripts/migrar-categoria-limpieza.js",
+    "test": "node --test scripts/sync-paulina.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

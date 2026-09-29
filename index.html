@@ -31,6 +31,8 @@
       --warning-light: #2A2212;
       --success: #7FB58E;
       --success-light: #15251C;
+      --paulina: #D69AB8;        /* Paulina Cocina: rosa apagado, distinto de danger/warning */
+      --paulina-light: #2B1D25;
       --text: #E2E7DF;
       --text-muted: #9CA89E;
       --text-light: #6D786F;
@@ -566,6 +568,20 @@
     .sl-qty { flex: 0 0 auto; text-align: right; }
     .sl-qty-num { display: block; font-size: 19px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; line-height: 1; }
     .sl-qty-unit { font-size: 11px; color: var(--text-light); }
+
+    /* ── Menú Paulina Cocina ── */
+    .badge-paulina { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; line-height: 1.4; padding: 1px 7px; border-radius: 999px; color: var(--paulina); background: var(--paulina-light); border: 1px solid var(--paulina); white-space: nowrap; vertical-align: middle; cursor: help; }
+    .item-name .badge-paulina, .mobile-card-name .badge-paulina { margin-left: 6px; }
+    .sl-block-head { padding: 12px 16px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+    .sl-block-title { font-size: 14px; font-weight: 700; color: var(--text); }
+    .sl-block-sub { margin-top: 3px; font-size: 12px; color: var(--text-muted); line-height: 1.4; overflow-wrap: anywhere; }
+    .sl-block-sub a { color: var(--primary); text-decoration: underline; }
+    .sl-block-paulina .sl-block-head { background: var(--paulina-light); border-bottom-color: var(--paulina); }
+    .sl-block-hogar { margin-top: 14px; }
+    .sl-block-empty { padding: 14px 16px; font-size: 13px; color: var(--text-muted); }
+    .sl-have { display: block; margin-top: 3px; font-size: 12px; color: var(--warning); }
+    .sl-main .badge-paulina { margin-bottom: 3px; }
+    .sl-row .sl-paulina-text { display: block; font-size: 15px; font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
 
     .export-box {
       background: var(--surface);
@@ -1375,10 +1391,51 @@
 
   // ── Helpers ──────────────────────────────────────────────────────────
   function stockStatus(item) {
+    // Ítems creados por la sync de Paulina sin mínimo propio: no son stock del
+    // hogar, solo se compran mientras estén en el menú vigente (bloque Paulina).
+    // Si el usuario les pone un mínimo, pasan a comportarse como cualquier ítem.
+    if (item.origen === 'paulina' && !(item.cantidad_minima > 0)) return 'ok';
     if (item.cantidad_actual <= 0) return 'critical';
     if (item.cantidad_actual < item.cantidad_minima * 0.5) return 'critical';
     if (item.cantidad_actual < item.cantidad_minima) return 'low';
     return 'ok';
+  }
+
+  // ── Paulina Cocina: helpers (campos opcionales; undefined/null si la migración no corrió) ──
+  const PAULINA_URL = 'https://almacen.paulinacocina.net';
+
+  function paulinaSemanaMax() {
+    let max = null;
+    state.items.forEach(i => {
+      const w = i.paulina_semana;
+      if (w != null && !isNaN(Number(w)) && (max === null || Number(w) > max)) max = Number(w);
+    });
+    return max;
+  }
+
+  function paulinaItems() {
+    const max = paulinaSemanaMax();
+    if (max === null) return [];
+    return state.items.filter(i => i.paulina_semana != null && Number(i.paulina_semana) === max);
+  }
+
+  function paulinaBadge(item) {
+    if (item.paulina_semana != null) {
+      return `<span class="badge-paulina" title="En el menú de Paulina Cocina, semana ${escAttr(String(item.paulina_semana))}">🍳 Paulina</span>`;
+    }
+    if (item.origen === 'paulina') {
+      return `<span class="badge-paulina" title="Agregado desde Paulina Cocina">🍳 Paulina</span>`;
+    }
+    return '';
+  }
+
+  // Cantidad sugerida a comprar: la de Paulina si es ítem del menú vigente, si no la del inventario
+  function cantidadSugerida(item) {
+    const pc = parseFloat(item.paulina_cantidad);
+    if (paulinaItems().some(p => p.id === item.id) && pc > 0) return pc;
+    const needed = Math.max(0, item.cantidad_minima - item.cantidad_actual);
+    const monthly = item.consumo_mensual || 0;
+    return Math.ceil(Math.max(needed, monthly) * 1.1);
   }
 
   function itemsBelow(cat) {
@@ -1511,7 +1568,7 @@
       const pillClass = st === 'critical' ? 'qty-critical' : st === 'low' ? 'qty-low' : 'qty-ok';
       const sub = item.subcategoria ? `<div class="item-sub">${item.subcategoria}</div>` : '';
       return `<tr class="${rowClass}">
-        <td><div class="item-name">${escHtml(item.nombre)}</div>${sub}</td>
+        <td><div class="item-name">${escHtml(item.nombre)}${paulinaBadge(item)}</div>${sub}</td>
         <td>
           <div class="qty-display">
             <div class="inline-edit">
@@ -1561,7 +1618,7 @@
           return `<div class="mobile-card" style="border-color:${borderColor}">
             <div class="mobile-card-top">
               <div>
-                <div class="mobile-card-name">${escHtml(item.nombre)}</div>
+                <div class="mobile-card-name">${escHtml(item.nombre)}${paulinaBadge(item)}</div>
                 ${sub}
               </div>
               <div class="mobile-card-actions">
@@ -1673,9 +1730,7 @@
     if (!item) return;
 
     // Calcular cantidad sugerida como fallback
-    const needed    = Math.max(0, item.cantidad_minima - item.cantidad_actual);
-    const monthly   = item.consumo_mensual || 0;
-    const suggested = Math.ceil(Math.max(needed, monthly) * 1.1);
+    const suggested = cantidadSugerida(item);
 
     // Usar la cantidad ingresada, o la sugerida si está vacía
     const cantidadComprada = qtyInput ? (parseFloat(qtyInput.value) || suggested) : suggested;
@@ -1688,6 +1743,13 @@
     if (error) { toast('Error al actualizar el stock', 'error'); return; }
 
     item.cantidad_actual = newQty;
+
+    // Ítems del menú Paulina siguen en la lista: quedan tildados (en el carrito)
+    if (paulinaItems().some(p => p.id === item.id)) {
+      if (!state.cartChecked) state.cartChecked = loadCart();
+      state.cartChecked.add(item.id);
+      saveCart();
+    }
 
     // Guardar en historial
     saveCompraHistory({
@@ -1791,29 +1853,75 @@
       <span class="gastos-total-val">$${total.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>`;
   }
 
+  // Barra de confirmación inline (opción A: dos toques)
+  function slConfirmBar(item, suggested) {
+    return `<div class="sl-row-confirm" style="flex-wrap:wrap;">
+          <span class="sl-confirm-label">¿Ya lo pusiste en el carrito?</span>
+          <button type="button" class="sl-confirm-btn sl-confirm-cancel" onclick="cancelCart()" aria-label="Cancelar">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+          </button>
+          <button type="button" class="sl-confirm-btn sl-confirm-ok" onclick="confirmCart('${item.id}')" aria-label="Confirmar">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.5 3.5L13 4"/></svg>
+          </button>
+          <div class="sl-confirm-price">
+            <input type="number" id="sl-qty-input" class="sl-price-input sl-qty-input" placeholder="Cant." min="0" step="any" inputmode="decimal" value="${suggested}">
+            <span class="sl-price-symbol">${escHtml(item.unidad)}</span>
+            <div class="sl-price-sep"></div>
+            <span class="sl-price-symbol">$</span>
+            <input type="number" id="sl-price-input" class="sl-price-input" placeholder="Precio (opcional)" min="0" step="0.01" inputmode="decimal">
+          </div>
+        </div>`;
+  }
+
+  // Texto principal de una fila Paulina: línea original o "nombre cantidad unidad"
+  function paulinaTexto(item) {
+    if (item.paulina_texto) return item.paulina_texto;
+    const partes = [item.nombre];
+    if (item.paulina_cantidad != null) partes.push(item.paulina_cantidad);
+    if (item.paulina_unidad) partes.push(item.paulina_unidad);
+    return partes.join(' ');
+  }
+
+  function fechaSync(items) {
+    let max = 0;
+    items.forEach(i => {
+      const t = i.paulina_sync_at ? new Date(i.paulina_sync_at).getTime() : NaN;
+      if (!isNaN(t) && t > max) max = t;
+    });
+    if (!max) return '';
+    const d = new Date(max);
+    const p = n => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
   function renderShoppingList() {
-    const below = allBelow();
+    const paulina = paulinaItems();
+    const paulinaIds = new Set(paulina.map(i => i.id));
+    // Un ítem del menú Paulina no se repite en el bloque hogar
+    const below = allBelow().filter(i => !paulinaIds.has(i.id));
+    const semana = paulinaSemanaMax();
     const wrap = document.getElementById('shoppingListWrap');
     const exportArea = document.getElementById('exportText');
     const prog = document.getElementById('shoppingProgress');
 
     if (!state.cartChecked) state.cartChecked = loadCart();
 
-    if (below.length === 0) {
+    if (below.length === 0 && paulina.length === 0) {
       wrap.innerHTML = `<div class="shopping-empty">✅ Todo el inventario está en stock. ¡Nada que comprar!</div>`;
       if (prog) prog.innerHTML = '';
       exportArea.value = '';
       return;
     }
 
-    // Soltar marcados que ya no están bajo mínimo
-    const belowIds = new Set(below.map(i => i.id));
+    // Soltar marcados que ya no están bajo mínimo ni en el menú Paulina (las keys siguen siendo ids de ítem)
+    const validIds = new Set([...below.map(i => i.id), ...paulinaIds]);
     let changed = false;
-    state.cartChecked.forEach(id => { if (!belowIds.has(id)) { state.cartChecked.delete(id); changed = true; } });
+    state.cartChecked.forEach(id => { if (!validIds.has(id)) { state.cartChecked.delete(id); changed = true; } });
     if (changed) saveCart();
 
-    const total = below.length;
-    const done = below.filter(i => state.cartChecked.has(i.id)).length;
+    const total = below.length + paulina.length;
+    const done = below.filter(i => state.cartChecked.has(i.id)).length
+               + paulina.filter(i => state.cartChecked.has(i.id)).length;
     const pct = Math.round((done / total) * 100);
 
     if (prog) {
@@ -1827,14 +1935,56 @@
 
     let html = '';
     let exportLines = ['🛒 LISTA DE COMPRAS — ' + new Date().toLocaleDateString('es-AR'), ''];
+
+    // ── Bloque Menú Paulina Cocina ──
+    if (paulina.length > 0) {
+      const fecha = fechaSync(paulina);
+      const sub = (fecha ? `Sincronizado automáticamente el ${fecha} desde ` : 'Sincronizado automáticamente desde ')
+        + `<a href="${PAULINA_URL}" target="_blank" rel="noopener">almacen.paulinacocina.net</a>`;
+      html += `<div class="sl-block sl-block-paulina">
+        <div class="sl-block-head">
+          <div class="sl-block-title">🍳 Menú Paulina Cocina · Semana ${escHtml(String(semana))}</div>
+          <div class="sl-block-sub">${sub}</div>
+        </div>`;
+      exportLines.push(`🍳 Menú Paulina Cocina – Semana ${semana}`);
+
+      paulina.forEach(item => {
+        const on = state.cartChecked.has(item.id);
+        const texto = paulinaTexto(item);
+        const tieneStock = parseFloat(item.cantidad_actual) > 0;
+        const enCasa = tieneStock ? `Tenés en casa: ${item.cantidad_actual} ${item.unidad || ''}`.trim() : '';
+        exportLines.push(`• ${texto}${enCasa ? '  (' + enCasa + ')' : ''}`);
+
+        if (state.cartPending === item.id) {
+          html += slConfirmBar(item, cantidadSugerida(item));
+        } else {
+          html += `<button type="button" class="sl-row${on ? ' checked' : ''}" onclick="toggleCart('${item.id}')">
+          <span class="sl-check">${on ? SL_ICON_CHECK : ''}</span>
+          <span class="sl-main">
+            <span class="badge-paulina" title="En el menú de Paulina Cocina, semana ${escAttr(String(item.paulina_semana))}">🍳 Paulina</span>
+            <span class="sl-paulina-text">${escHtml(texto)}</span>
+            ${enCasa ? `<span class="sl-have">${escHtml(enCasa)}</span>` : ''}
+          </span>
+        </button>`;
+        }
+      });
+      html += `</div>`;
+      exportLines.push('');
+    }
+
+    // ── Bloque Inventario del hogar ──
+    const sorted = [...below].sort((a, b) => a.categoria.localeCompare(b.categoria));
+    if (paulina.length > 0) {
+      html += `<div class="sl-block sl-block-hogar"><div class="sl-block-head"><div class="sl-block-title">🏠 Inventario del hogar</div></div>`;
+      exportLines.push('🏠 Hogar');
+    }
+    if (sorted.length === 0) {
+      html += `<div class="sl-block-empty">✅ Inventario del hogar en stock</div>`;
+    }
     let lastCat = '';
 
-    const sorted = [...below].sort((a, b) => a.categoria.localeCompare(b.categoria));
-
     sorted.forEach(item => {
-      const needed = Math.max(0, item.cantidad_minima - item.cantidad_actual);
-      const monthly = item.consumo_mensual || 0;
-      const suggested = Math.ceil(Math.max(needed, monthly) * 1.1);
+      const suggested = cantidadSugerida(item);
       const status = stockStatus(item);
       const on = state.cartChecked.has(item.id);
 
@@ -1852,31 +2002,13 @@
         ? `<span class="sl-tag sl-tag-critical">${SL_ICON_ALERT} Sin stock</span>`
         : `<span class="sl-tag sl-tag-low">${SL_ICON_DOWN} Bajo</span>`;
 
-      const isPending = state.cartPending === item.id;
-
-      if (isPending) {
-        // Barra de confirmación inline (opción A: dos toques)
-        html += `<div class="sl-row-confirm" style="flex-wrap:wrap;">
-          <span class="sl-confirm-label">¿Ya lo pusiste en el carrito?</span>
-          <button type="button" class="sl-confirm-btn sl-confirm-cancel" onclick="cancelCart()" aria-label="Cancelar">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
-          </button>
-          <button type="button" class="sl-confirm-btn sl-confirm-ok" onclick="confirmCart('${item.id}')" aria-label="Confirmar">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.5 3.5L13 4"/></svg>
-          </button>
-          <div class="sl-confirm-price">
-            <input type="number" id="sl-qty-input" class="sl-price-input sl-qty-input" placeholder="Cant." min="0" step="any" inputmode="decimal" value="${suggested}">
-            <span class="sl-price-symbol">${escHtml(item.unidad)}</span>
-            <div class="sl-price-sep"></div>
-            <span class="sl-price-symbol">$</span>
-            <input type="number" id="sl-price-input" class="sl-price-input" placeholder="Precio (opcional)" min="0" step="0.01" inputmode="decimal">
-          </div>
-        </div>`;
+      if (state.cartPending === item.id) {
+        html += slConfirmBar(item, suggested);
       } else {
         html += `<button type="button" class="sl-row${on ? ' checked' : ''}" onclick="toggleCart('${item.id}')">
           <span class="sl-check">${on ? SL_ICON_CHECK : ''}</span>
           <span class="sl-main">
-            <span class="sl-name">${escHtml(item.nombre)}</span>
+            <span class="sl-name">${escHtml(item.nombre)}${paulinaBadge(item) ? ' ' + paulinaBadge(item) : ''}</span>
             <span class="sl-meta">${tag}<span class="sl-meta-text">tenés ${item.cantidad_actual} · mín ${item.cantidad_minima} ${item.unidad}</span></span>
           </span>
           <span class="sl-qty">
@@ -1886,6 +2018,7 @@
         </button>`;
       }
     });
+    if (paulina.length > 0) html += `</div>`;
 
     exportLines.push('', `Generado: ${new Date().toLocaleString('es-AR')}`);
     wrap.innerHTML = html;
